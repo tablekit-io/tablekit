@@ -1,0 +1,11 @@
+FROM golang:1.25
+
+WORKDIR /app
+
+# Air for live-reload (project moved from cosmtrek/air to air-verse/air)
+RUN go install github.com/air-verse/air@latest
+
+# Populate the (host-persisted) module cache at container start, then run Air
+# which rebuilds on source changes. `go mod download` is idempotent and does not
+# mutate go.mod/go.sum — with the warm caches it's a near-no-op after first run.
+CMD ["sh", "-c", "go mod download && air -c .air.toml"]

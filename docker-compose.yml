@@ -1,6 +1,14 @@
 services:
   core:
-    build: ./core
+    build:
+      context: ./core
+      dockerfile: Dockerfile-dev
+    environment:
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      # Persist Go module + build caches in the gocache named volume (mounted
+      # below) so deps are downloaded and compiled once, not on every start.
+      GOMODCACHE: /gocache/mod
+      GOCACHE: /gocache/build
     ports:
       # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
       - target: 8080
@@ -16,9 +24,17 @@ services:
       - type: bind
         source: ./core
         target: /app
+      # Go module + build caches in a named volume so they survive container
+      # recreation (deps download/compile once, then reused).
+      - type: volume
+        source: gocache
+        target: /gocache
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 60s
+
+volumes:
+  gocache:
