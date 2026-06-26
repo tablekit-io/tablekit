@@ -15,6 +15,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -72,12 +73,21 @@ type Store struct {
 	mu  sync.Mutex
 }
 
-// New ensures DataDir exists and returns a Store.
+// New ensures DataDir exists and returns a Store. Existing state files are
+// loaded once up front so schema violations fail fast at startup rather than on
+// the first request that touches them.
 func New(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	return &Store{dir: dir}, nil
+	s := &Store{dir: dir}
+	if _, err := s.loadClients(); err != nil {
+		return nil, fmt.Errorf("loading clients.json: %w", err)
+	}
+	if _, err := s.loadTokens(); err != nil {
+		return nil, fmt.Errorf("loading tokens.json: %w", err)
+	}
+	return s, nil
 }
 
 // ---- low-level file helpers (callers hold s.mu) -------------------------
@@ -96,6 +106,9 @@ func (s *Store) readJSON(name string, v any) error {
 	}
 	if len(b) == 0 {
 		return nil
+	}
+	if err := validateAgainstSchema(name, b); err != nil {
+		return err
 	}
 	return json.Unmarshal(b, v)
 }
