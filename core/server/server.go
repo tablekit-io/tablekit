@@ -1,23 +1,51 @@
+// Package server builds the two Gin engines this service runs:
+//
+//   - app engine:     MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
+//   - control engine: /, /health (liveness; reserved for future ops)
 package server
 
 import (
-	"github.com/bytedance/sonic"
-	"github.com/gofiber/fiber/v2"
+	"core/config"
+	"core/mcpserver"
+	"core/oauth"
+	"core/server/handlers"
+	"core/store"
+
+	"github.com/gin-gonic/gin"
 )
 
-// New builds the Fiber app with sonic JSON config and registered routes.
-func New() *fiber.App {
-	app := fiber.New(fiber.Config{
-		JSONEncoder: sonic.ConfigFastest.Marshal,
-		JSONDecoder: sonic.ConfigFastest.Unmarshal,
-	})
-
-	RegisterRoutes(app)
-
-	return app
+// App holds the constructed engines and the config that drives the listeners.
+type App struct {
+	Cfg     *config.Config
+	AppEng  *gin.Engine
+	Control *gin.Engine
 }
 
-// Start builds the app and listens on addr.
-func Start(addr string) error {
-	return New().Listen(addr)
+// Build wires storage, OAuth and MCP into the two engines. It returns an error
+// if persistence or the signing key cannot be initialized.
+func Build(cfg *config.Config) (*App, error) {
+	st, err := store.New(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	oauthHandlers, err := oauth.NewHandlers(cfg, st)
+	if err != nil {
+		return nil, err
+	}
+
+	appEng := gin.New()
+	appEng.Use(gin.Logger(), gin.Recovery())
+	oauthHandlers.Register(appEng)
+	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
+	// adapts them. /mcp must accept GET, POST and DELETE.
+	mcpHandler := mcpserver.Handler(cfg, oauthHandlers.Issuer())
+	appEng.Any("/mcp", gin.WrapH(mcpHandler))
+
+	control := gin.New()
+	control.Use(gin.Logger(), gin.Recovery())
+	control.GET("/", handlers.Root)
+	control.GET("/health", handlers.Health)
+
+	return &App{Cfg: cfg, AppEng: appEng, Control: control}, nil
 }

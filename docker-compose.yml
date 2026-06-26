@@ -2,8 +2,14 @@ services:
   core:
     build: ./core
     ports:
+      # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
       - target: 8080
         published: 8080
+        protocol: tcp
+        mode: host
+      # control port: /, /health, reserved for ops
+      - target: 8081
+        published: 8081
         protocol: tcp
         mode: host
     volumes:
@@ -11,7 +17,7 @@ services:
         source: ./core
         target: /app
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
       interval: 10s
       timeout: 3s
       retries: 3

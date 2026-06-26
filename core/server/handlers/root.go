@@ -1,8 +1,12 @@
 package handlers
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 // Root responds with a plain-text greeting.
-func Root(c *fiber.Ctx) error {
-	return c.SendString("hello world")
+func Root(c *gin.Context) {
+	c.String(http.StatusOK, "hello world")
 }
