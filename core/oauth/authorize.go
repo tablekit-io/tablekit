@@ -17,11 +17,16 @@ const authCodeTTL = 5 * time.Minute
 
 // handleAuthorize implements GET /oauth/authorize.
 //
-// There is no login UI: authorization is auto-approved. Single-client pairing
-// is enforced here — the first client to reach this endpoint successfully
-// becomes THE paired client; any later, different client gets a plaintext
-// "already paired" page instead of a code.
+// There is no login UI: authorization is auto-approved. Pairing is enforced
+// here via the store's pairing mode (once/indefinite/disabled): an
+// already-paired client is always admitted, a new client is admitted only if
+// the mode allows, otherwise it gets the "already paired" page that bounces
+// back with an OAuth error. See `tablekit pairing` to change the mode.
 func (h *Handlers) handleAuthorize(c *gin.Context) {
+	// Hold the lock for the entire handler so pairing decisions cannot race.
+	h.authorizeMu.Lock()
+	defer h.authorizeMu.Unlock()
+
 	q := c.Request.URL.Query()
 	responseType := q.Get("response_type")
 	clientID := q.Get("client_id")
@@ -66,13 +71,13 @@ func (h *Handlers) handleAuthorize(c *gin.Context) {
 		return
 	}
 
-	// Pairing lock: succeeds only if unpaired or already this client.
-	paired, err := h.store.Pair(clientID)
+	// Pairing gate: allowed if already paired or the mode permits a new client.
+	allowed, err := h.store.TryPair(clientID)
 	if err != nil {
 		authorizeError(c, "internal error during pairing")
 		return
 	}
-	if !paired {
+	if !allowed {
 		renderAlreadyPaired(c, redirectURI, state)
 		return
 	}

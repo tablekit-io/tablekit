@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 )
@@ -55,10 +56,23 @@ type Chain struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+// Pairing modes control whether a not-yet-paired client may pair.
+const (
+	PairingOnce       = "once"       // next new client pairs, then mode flips to disabled
+	PairingIndefinite = "indefinite" // every new client may pair
+	PairingDisabled   = "disabled"   // no new client may pair
+)
+
 // clientsFile is the on-disk shape of clients.json.
 type clientsFile struct {
-	PairedClientID string             `json:"paired_client_id"`
-	Clients        map[string]*Client `json:"clients"`
+	// PairingMode gates whether new clients may pair; defaults to "once".
+	PairingMode string `json:"pairing_mode"`
+	// PairedClientIDs are the clients allowed to authenticate.
+	PairedClientIDs []string `json:"paired_client_ids"`
+	// LegacyPairedClientID migrates the old single-client field: it is folded
+	// into PairedClientIDs on load and dropped on the next save (omitempty).
+	LegacyPairedClientID string             `json:"paired_client_id,omitempty"`
+	Clients              map[string]*Client `json:"clients"`
 }
 
 // tokensFile is the on-disk shape of tokens.json.
@@ -134,6 +148,20 @@ func (s *Store) loadClients() (*clientsFile, error) {
 	if cf.Clients == nil {
 		cf.Clients = map[string]*Client{}
 	}
+	if cf.PairedClientIDs == nil {
+		// Keep it a non-nil slice so it marshals to [] not null (schema: array).
+		cf.PairedClientIDs = []string{}
+	}
+	if cf.PairingMode == "" {
+		cf.PairingMode = PairingOnce
+	}
+	// Fold the legacy single paired client into the list.
+	if cf.LegacyPairedClientID != "" {
+		if !slices.Contains(cf.PairedClientIDs, cf.LegacyPairedClientID) {
+			cf.PairedClientIDs = append(cf.PairedClientIDs, cf.LegacyPairedClientID)
+		}
+		cf.LegacyPairedClientID = ""
+	}
 	return cf, nil
 }
 
@@ -202,34 +230,63 @@ func (s *Store) GetClient(id string) (*Client, error) {
 	return cf.Clients[id], nil
 }
 
-// PairedClientID returns the locked client id, or "" if none yet.
-func (s *Store) PairedClientID() (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cf, err := s.loadClients()
-	if err != nil {
-		return "", err
-	}
-	return cf.PairedClientID, nil
-}
-
-// Pair locks the server to clientID if not already paired. It is idempotent
-// for the same client and reports whether clientID is (now) the paired one.
-func (s *Store) Pair(clientID string) (ok bool, err error) {
+// TryPair reports whether clientID may use the server, pairing it if the
+// current mode allows. Already-paired clients are always allowed.
+//
+//   - disabled:   new clients rejected
+//   - once:       new client paired, then mode flips to disabled
+//   - indefinite: every new client paired; mode unchanged
+func (s *Store) TryPair(clientID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cf, err := s.loadClients()
 	if err != nil {
 		return false, err
 	}
-	if cf.PairedClientID == "" {
-		cf.PairedClientID = clientID
-		if err := s.writeJSON("clients.json", cf); err != nil {
-			return false, err
-		}
+	if slices.Contains(cf.PairedClientIDs, clientID) {
 		return true, nil
 	}
-	return cf.PairedClientID == clientID, nil
+	switch cf.PairingMode {
+	case PairingIndefinite:
+		cf.PairedClientIDs = append(cf.PairedClientIDs, clientID)
+	case PairingOnce:
+		cf.PairedClientIDs = append(cf.PairedClientIDs, clientID)
+		cf.PairingMode = PairingDisabled
+	default: // disabled or unknown
+		return false, nil
+	}
+	if err := s.writeJSON("clients.json", cf); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SetPairingMode persists a new pairing mode. Used by the `pairing` CLI.
+func (s *Store) SetPairingMode(mode string) error {
+	switch mode {
+	case PairingOnce, PairingIndefinite, PairingDisabled:
+	default:
+		return fmt.Errorf("unknown pairing mode %q", mode)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cf, err := s.loadClients()
+	if err != nil {
+		return err
+	}
+	cf.PairingMode = mode
+	return s.writeJSON("clients.json", cf)
+}
+
+// PairingStatus returns the current mode and the paired client ids.
+func (s *Store) PairingStatus() (mode string, paired []string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cf, err := s.loadClients()
+	if err != nil {
+		return "", nil, err
+	}
+	return cf.PairingMode, cf.PairedClientIDs, nil
 }
 
 // ---- auth codes ---------------------------------------------------------

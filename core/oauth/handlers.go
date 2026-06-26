@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"net/http"
+	"sync"
 
 	"core/config"
 	"core/store"
@@ -15,6 +16,10 @@ type Handlers struct {
 	cfg    *config.Config
 	store  *store.Store
 	issuer *Issuer
+	// authorizeMu serializes the whole /authorize handler so the
+	// read-client → pair → issue-code sequence is atomic and two concurrent
+	// requests can never both win a pairing slot.
+	authorizeMu sync.Mutex
 }
 
 // NewHandlers wires the OAuth layer to its config, persistence and JWT issuer.
