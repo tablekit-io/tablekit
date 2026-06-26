@@ -1,0 +1,9 @@
+# Build output (Air builds to /build inside the container)
+tmp/
+build/
+
+# Go
+*.exe
+*.test
+*.out
+vendor/

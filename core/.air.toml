@@ -1,0 +1,16 @@
+root = "."
+tmp_dir = "/build"
+
+[build]
+  cmd = "go build -o /build/tablekit ."
+  bin = "/build/tablekit"
+  args_bin = ["serve"]
+  include_ext = ["go"]
+  delay = 1000
+  stop_on_error = true
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

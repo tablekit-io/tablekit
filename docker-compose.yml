@@ -1,0 +1,12 @@
+services:
+  core:
+    build: ./core
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: host
+    volumes:
+      - type: bind
+        source: ./core
+        target: /app
