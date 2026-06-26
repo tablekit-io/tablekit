@@ -13,6 +13,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// ptr returns a pointer to v, for the optional *bool annotation hints.
+func ptr[T any](v T) *T { return &v }
+
 // helloInput is the hello_world tool's argument schema. Name is optional.
 type helloInput struct {
 	Name string `json:"name,omitempty" jsonschema:"name to greet; defaults to world"`
@@ -48,6 +51,15 @@ func newServer() *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "hello_world",
 		Description: "Returns a friendly greeting, optionally addressed to a name.",
+		// Without these hints the MCP spec defaults are conservative
+		// (destructive + open-world + write), which clients like ChatGPT
+		// surface as scary badges. This tool only computes a string.
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			DestructiveHint: ptr(false),
+			OpenWorldHint:   ptr(false),
+		},
 	}, helloWorld)
 	return s
 }
