@@ -73,7 +73,7 @@ func (h *Handlers) handleAuthorize(c *gin.Context) {
 		return
 	}
 	if !paired {
-		c.String(http.StatusOK, "already paired")
+		renderAlreadyPaired(c, redirectURI, state)
 		return
 	}
 
@@ -113,4 +113,41 @@ func (h *Handlers) handleAuthorize(c *gin.Context) {
 func authorizeError(c *gin.Context, description string) {
 	c.Header("Cache-Control", "no-store")
 	c.String(http.StatusBadRequest, "OAuth error: %s", description)
+}
+
+// alreadyPairedRedirectDelay is how long the "already paired" page lingers
+// before bouncing back to the client with an OAuth error.
+const alreadyPairedRedirectDelay = 4
+
+// renderAlreadyPaired shows a brief "already paired" page, then redirects back
+// to the client's redirect_uri with error=access_denied (RFC 6749 §4.1.2.1) so
+// the client surfaces a real failure instead of hanging. redirect_uri was
+// already validated as registered for this client, so the bounce is safe.
+func renderAlreadyPaired(c *gin.Context, redirectURI, state string) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Type", "text/html; charset=utf-8")
+
+	target, err := url.Parse(redirectURI)
+	if err != nil {
+		c.String(http.StatusOK, "already paired")
+		return
+	}
+	q := target.Query()
+	q.Set("error", "access_denied")
+	q.Set("error_description", "this server is already paired with another client")
+	if state != "" {
+		q.Set("state", state)
+	}
+	target.RawQuery = q.Encode()
+
+	c.Status(http.StatusOK)
+	if err := alreadyPairedTmpl.Execute(c.Writer, struct {
+		Delay       int
+		RedirectURL string
+	}{
+		Delay:       alreadyPairedRedirectDelay,
+		RedirectURL: target.String(),
+	}); err != nil {
+		c.String(http.StatusInternalServerError, "already paired")
+	}
 }
