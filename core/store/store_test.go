@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -21,18 +22,102 @@ func newStore(t *testing.T) *Store {
 	return st
 }
 
-func TestSigningKey(t *testing.T) {
+func TestSigningKeyGeneratesBase64(t *testing.T) {
 	st := newStore(t)
 
 	k1, err := st.SigningKey()
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(k1), 32)
+	assert.Len(t, k1, 32)
 
-	// Stable across calls and persisted to disk.
+	// The file is base64 text that decodes back to the key, not a binary blob.
+	raw, err := os.ReadFile(filepath.Join(st.dir, "signing.key"))
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(string(raw))
+	require.NoError(t, err)
+	assert.Equal(t, k1, decoded)
+
+	// Stable across calls and across a fresh Store over the same dir.
 	k2, err := st.SigningKey()
 	require.NoError(t, err)
 	assert.Equal(t, k1, k2)
-	assert.FileExists(t, filepath.Join(st.dir, "signing.key"))
+
+	reopened, err := New(st.dir)
+	require.NoError(t, err)
+	k3, err := reopened.SigningKey()
+	require.NoError(t, err)
+	assert.Equal(t, k1, k3)
+}
+
+func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "signing.key")
+
+	// Pre-base64 format: exactly 32 raw bytes.
+	legacy := make([]byte, 32)
+	for i := range legacy {
+		legacy[i] = byte(i + 1)
+	}
+	require.NoError(t, os.WriteFile(keyPath, legacy, 0o600))
+
+	// New() migrates the file in place at boot.
+	st, err := New(dir)
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(keyPath)
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(string(raw))
+	require.NoError(t, err)
+	assert.Equal(t, legacy, decoded, "file rewritten as base64 of the legacy key")
+
+	key, err := st.SigningKey()
+	require.NoError(t, err)
+	assert.Equal(t, legacy, key, "same key bytes preserved across migration")
+
+	// Re-opening is idempotent.
+	st2, err := New(dir)
+	require.NoError(t, err)
+	key2, err := st2.SigningKey()
+	require.NoError(t, err)
+	assert.Equal(t, legacy, key2)
+}
+
+func TestDecodeSigningKey(t *testing.T) {
+	key32 := make([]byte, 32)
+	for i := range key32 {
+		key32[i] = byte(i)
+	}
+	key40 := append(append([]byte{}, key32...), []byte("abcdefgh")...)
+
+	tests := []struct {
+		name    string
+		in      string
+		want    []byte
+		wantErr bool
+	}{
+		{"valid 32", base64.StdEncoding.EncodeToString(key32), key32, false},
+		{"raw unpadded", base64.RawStdEncoding.EncodeToString(key32), key32, false},
+		{"longer kept", base64.StdEncoding.EncodeToString(key40), key40, false},
+		{
+			"short padded",
+			base64.StdEncoding.EncodeToString([]byte("sixteen-byte-key")),
+			append([]byte("sixteen-byte-key"), make([]byte, 16)...),
+			false,
+		},
+		{"empty", "", nil, true},
+		{"not base64", "!!!not-base64!!!", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DecodeSigningKey(tt.in)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			assert.GreaterOrEqual(t, len(got), 32)
+		})
+	}
 }
 
 func TestClients(t *testing.T) {

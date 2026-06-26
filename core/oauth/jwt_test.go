@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"encoding/base64"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -117,4 +119,71 @@ func flip(b byte) string {
 		return "B"
 	}
 	return "A"
+}
+
+// newStore is a small helper for the env-key tests that need the store dir.
+func newStore(t *testing.T) (*store.Store, string) {
+	t.Helper()
+	dir := t.TempDir()
+	st, err := store.New(dir)
+	require.NoError(t, err)
+	return st, dir
+}
+
+func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	cfg := testConfig()
+	cfg.SigningKey = base64.StdEncoding.EncodeToString(key)
+
+	// Two issuers, different stores, same external key → cross-verify.
+	stA, _ := newStore(t)
+	stB, _ := newStore(t)
+	issA, err := NewIssuer(cfg, stA)
+	require.NoError(t, err)
+	issB, err := NewIssuer(cfg, stB)
+	require.NoError(t, err)
+
+	tok, err := issA.IssueAccess("c", "ch", "mcp")
+	require.NoError(t, err)
+	claims, err := issB.VerifyAccess(tok)
+	require.NoError(t, err)
+	assert.Equal(t, "ch", claims.Chain)
+}
+
+func TestEnvSigningKeyShortIsPadded(t *testing.T) {
+	cfg := testConfig()
+	cfg.SigningKey = base64.StdEncoding.EncodeToString([]byte("short-key"))
+
+	st, _ := newStore(t)
+	iss, err := NewIssuer(cfg, st)
+	require.NoError(t, err)
+
+	tok, err := iss.IssueAccess("c", "ch", "mcp")
+	require.NoError(t, err)
+	_, err = iss.VerifyAccess(tok)
+	require.NoError(t, err)
+}
+
+func TestEnvSigningKeyInvalidRejected(t *testing.T) {
+	cfg := testConfig()
+	cfg.SigningKey = "!!! not base64 !!!"
+
+	st, _ := newStore(t)
+	_, err := NewIssuer(cfg, st)
+	assert.Error(t, err)
+}
+
+func TestEnvSigningKeyDoesNotWriteFile(t *testing.T) {
+	cfg := testConfig()
+	cfg.SigningKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
+
+	st, dir := newStore(t)
+	_, err := NewIssuer(cfg, st)
+	require.NoError(t, err)
+
+	// Env key takes precedence; the store's key file is never created.
+	assert.NoFileExists(t, filepath.Join(dir, "signing.key"))
 }

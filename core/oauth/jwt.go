@@ -47,9 +47,16 @@ func init() {
 	jwt.TimePrecision = time.Microsecond
 }
 
-// NewIssuer loads (or generates) the signing key from the store.
+// NewIssuer resolves the signing key: an externally provided base64 key
+// (cfg.SigningKey) wins, otherwise the store's generated/persisted key is used.
 func NewIssuer(cfg *config.Config, st *store.Store) (*Issuer, error) {
-	key, err := st.SigningKey()
+	var key []byte
+	var err error
+	if cfg.SigningKey != "" {
+		key, err = store.DecodeSigningKey(cfg.SigningKey)
+	} else {
+		key, err = st.SigningKey()
+	}
 	if err != nil {
 		return nil, err
 	}

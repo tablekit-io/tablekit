@@ -79,6 +79,7 @@ Everything is set through the environment.
 | `APP_PORT`          | `8080`                   | MCP + OAuth listener.                           |
 | `CONTROL_PORT`      | `8081`                   | Health and ops listener.                        |
 | `DATA_DIR`          | `./data`                 | Where pairing + token state is kept.            |
+| `SIGNING_KEY`       | generated                | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
 | `ACCESS_TTL`        | `15m`                    | Access token lifetime.                          |
 | `REFRESH_TTL`       | `168h`                   | Refresh token lifetime.                         |
 

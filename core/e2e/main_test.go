@@ -66,6 +66,11 @@ type server struct {
 // waits until it is healthy. The process is killed and the data dir removed on
 // test cleanup.
 func startServer(t *testing.T) server {
+	return startServerEnv(t)
+}
+
+// startServerEnv is startServer with extra "KEY=value" environment entries.
+func startServerEnv(t *testing.T, extraEnv ...string) server {
 	t.Helper()
 	appPort, controlPort := freePort(t), freePort(t)
 	dataDir := t.TempDir()
@@ -79,6 +84,7 @@ func startServer(t *testing.T) server {
 		"DATA_DIR="+dataDir,
 		"PUBLIC_BASE_URL="+appURL,
 	)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Start())
 	t.Cleanup(func() {
