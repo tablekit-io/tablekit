@@ -52,7 +52,17 @@ func Handler(cfg *config.Config, issuer *oauth.Issuer) http.Handler {
 
 	streamable := mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return server },
-		&mcp.StreamableHTTPOptions{Stateless: true},
+		&mcp.StreamableHTTPOptions{
+			Stateless: true,
+			// This server is deployed behind a reverse proxy and reached via a
+			// public hostname (PUBLIC_BASE_URL). The SDK's DNS-rebinding guard
+			// rejects requests whose Host header is non-loopback when the proxy
+			// forwards over 127.0.0.1, which 403s every /mcp call (e.g. ChatGPT
+			// gets "there was an issue" and no tools load). That guard targets
+			// browser attacks on local dev servers; /mcp already requires a
+			// bearer token, so disable it here.
+			DisableLocalhostProtection: true,
+		},
 	)
 
 	verifier := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
