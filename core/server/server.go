@@ -36,6 +36,7 @@ func Build(cfg *config.Config) (*App, error) {
 
 	appEng := gin.New()
 	appEng.Use(gin.Logger(), gin.Recovery())
+	appEng.GET("/", handlers.Welcome("hello and welcome to the tablekit MCP server"))
 	oauthHandlers.Register(appEng)
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.
@@ -44,7 +45,7 @@ func Build(cfg *config.Config) (*App, error) {
 
 	control := gin.New()
 	control.Use(gin.Logger(), gin.Recovery())
-	control.GET("/", handlers.Root)
+	control.GET("/", handlers.Welcome("hello and welcome to the tablekit control server"))
 	control.GET("/health", handlers.Health)
 
 	return &App{Cfg: cfg, AppEng: appEng, Control: control}, nil
