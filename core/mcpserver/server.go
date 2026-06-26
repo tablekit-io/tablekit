@@ -18,15 +18,24 @@ type helloInput struct {
 	Name string `json:"name,omitempty" jsonschema:"name to greet; defaults to world"`
 }
 
-// helloWorld returns a greeting. Out is any, so the typed-output slot is nil.
-func helloWorld(_ context.Context, _ *mcp.CallToolRequest, in helloInput) (*mcp.CallToolResult, any, error) {
+// helloOutput is the hello_world tool's structured result. Because Out is a
+// struct (not any), the SDK generates the tool's outputSchema from it and
+// populates CallToolResult.StructuredContent with this value automatically.
+type helloOutput struct {
+	Greeting string `json:"greeting" jsonschema:"the greeting message"`
+}
+
+// helloWorld returns a greeting both as human-readable text and as structured
+// output validated against helloOutput's schema.
+func helloWorld(_ context.Context, _ *mcp.CallToolRequest, in helloInput) (*mcp.CallToolResult, helloOutput, error) {
 	name := in.Name
 	if name == "" {
 		name = "world"
 	}
+	greeting := "Hello, " + name + "!"
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "Hello, " + name + "!"}},
-	}, nil, nil
+		Content: []mcp.Content{&mcp.TextContent{Text: greeting}},
+	}, helloOutput{Greeting: greeting}, nil
 }
 
 // newServer builds the MCP server and registers tools.
