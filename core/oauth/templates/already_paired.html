@@ -1,9 +1,51 @@
 <!doctype html>
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="{{.Delay}};url={{.RedirectURL}}">
-<title>Already paired</title>
-<div style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem">
-  <h1>Already paired</h1>
-  <p>This server is already paired with another client and cannot pair again.</p>
-  <p>Returning you to the application&hellip; (<a href="{{.RedirectURL}}">continue now</a>)</p>
-</div>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="{{.Delay}};url={{.RedirectURL}}">
+  <title>Already paired</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+      background: #f6f7f9;
+      color: #1c1e21;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #16181c; color: #e7e9ea; }
+      .card { background: #1f2228; border-color: #2c2f36; }
+      a { color: #6aa6ff; }
+    }
+    .card {
+      max-width: 32rem;
+      margin: 1.5rem;
+      padding: 2rem 2.25rem;
+      background: #fff;
+      border: 1px solid #e3e5e8;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    h1 { margin: 0 0 0.5rem; font-size: 1.4rem; }
+    p { margin: 0.5rem 0; }
+    .muted { color: #6b7280; font-size: 0.9rem; }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Already paired</h1>
+    <p>This server is already paired with another client and cannot pair again.</p>
+    <p class="muted">
+      Returning you to the application&hellip;
+      <a href="{{.RedirectURL}}">continue now</a>
+    </p>
+  </main>
+</body>
+</html>
