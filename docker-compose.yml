@@ -36,5 +36,27 @@ services:
       retries: 3
       start_period: 60s
 
+  # Dev-only: builds the @tablekit/widgets MCP Apps templates with bun + vite in
+  # watch mode. Output lands in core/mcpserver/widgets/dist (bind-mounted below),
+  # which the core container's Air watcher sees, triggering a Go rebuild that
+  # re-embeds the new HTML — so editing a widget hot-reloads the whole stack.
+  widgets:
+    image: oven/bun:1
+    working_dir: /widgets
+    # `bun run dev` is `vite build --watch`. bun install runs first so a fresh
+    # checkout works; it's a near-no-op once node_modules is populated.
+    command: sh -c "bun install && bun run dev"
+    volumes:
+      # node_modules lives on the host (not a named volume) so the IDE resolves
+      # types. The container writes Linux-native binaries here, which the IDE
+      # never executes — only .d.ts types are read.
+      - type: bind
+        source: ./widgets
+        target: /widgets
+      # vite's dist/ is the core embed dir, so built widgets flow into core.
+      - type: bind
+        source: ./core/mcpserver/widgets/dist
+        target: /widgets/dist
+
 volumes:
   gocache:

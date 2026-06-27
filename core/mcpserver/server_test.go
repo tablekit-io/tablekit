@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"core/mcpserver/widgets"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,15 +52,23 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	return cs
 }
 
+// toolsByName lists the server's tools and indexes them by name.
+func toolsByName(t *testing.T, cs *mcp.ClientSession) map[string]*mcp.Tool {
+	t.Helper()
+	res, err := cs.ListTools(context.Background(), &mcp.ListToolsParams{})
+	require.NoError(t, err)
+	byName := make(map[string]*mcp.Tool, len(res.Tools))
+	for _, tool := range res.Tools {
+		byName[tool.Name] = tool
+	}
+	return byName
+}
+
 func TestListToolsExposesAnnotationsAndSchema(t *testing.T) {
 	cs := connectInMemory(t)
 
-	res, err := cs.ListTools(context.Background(), &mcp.ListToolsParams{})
-	require.NoError(t, err)
-	require.Len(t, res.Tools, 1)
-
-	tool := res.Tools[0]
-	assert.Equal(t, "hello_world", tool.Name)
+	tool := toolsByName(t, cs)["hello_world"]
+	require.NotNil(t, tool)
 	assert.NotNil(t, tool.OutputSchema, "tool should advertise an output schema")
 
 	require.NotNil(t, tool.Annotations)
@@ -68,6 +78,93 @@ func TestListToolsExposesAnnotationsAndSchema(t *testing.T) {
 	assert.False(t, *tool.Annotations.DestructiveHint)
 	require.NotNil(t, tool.Annotations.OpenWorldHint)
 	assert.False(t, *tool.Annotations.OpenWorldHint)
+}
+
+// uiMeta extracts the _meta.ui map a tool advertises, or nil if absent.
+func uiMeta(tool *mcp.Tool) map[string]any {
+	ui, ok := tool.Meta["ui"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return ui
+}
+
+func TestInteractiveToolsRegistered(t *testing.T) {
+	cs := connectInMemory(t)
+	tools := toolsByName(t, cs)
+
+	// Build-independent: both tools are always registered.
+	require.NotNil(t, tools["hello_world_interactive"])
+	data := tools["hello_world_interactive_data"]
+	require.NotNil(t, data)
+
+	// The loader is app-only: _meta.ui.visibility advertises ['app'] regardless
+	// of whether the widget has been built (it carries no widget link).
+	dataUI := uiMeta(data)
+	require.NotNil(t, dataUI, "data tool should carry _meta.ui")
+	assert.Equal(t, []any{"app"}, dataUI["visibility"])
+
+	// Build-dependent: the model-facing tool links its widget via
+	// _meta.ui.resourceUri only when @tablekit/widgets has been built into the
+	// embed dir. A fresh checkout (placeholder manifest) carries no link.
+	if widgets.WidgetURI("hello_world_interactive") != "" {
+		ui := uiMeta(tools["hello_world_interactive"])
+		require.NotNil(t, ui, "built interactive tool should carry _meta.ui")
+		uri, _ := ui["resourceUri"].(string)
+		assert.Contains(t, uri, "ui://tablekit/hello_world_interactive-")
+	}
+}
+
+func TestWidgetResourceIsServed(t *testing.T) {
+	// Only meaningful once the widget is built into the embed dir; a fresh
+	// checkout ships the placeholder manifest and serves no UI resources.
+	resources := widgets.Resources()
+	if len(resources) == 0 {
+		t.Skip("no built widgets in embed dir (run `bun run build` in widgets/)")
+	}
+
+	cs := connectInMemory(t)
+	list, err := cs.ListResources(context.Background(), &mcp.ListResourcesParams{})
+	require.NoError(t, err)
+
+	var uri string
+	for _, r := range list.Resources {
+		if r.Name == "hello_world_interactive" {
+			uri = r.URI
+			assert.Equal(t, "text/html;profile=mcp-app", r.MIMEType)
+		}
+	}
+	require.NotEmpty(t, uri, "widget resource should be listed")
+
+	read, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	require.NoError(t, err)
+	require.Len(t, read.Contents, 1)
+	assert.Contains(t, read.Contents[0].Text, "<html", "resource should serve the widget HTML")
+}
+
+func TestInteractiveDataReturnsRandomSlices(t *testing.T) {
+	tests := []struct {
+		name string
+		in   dataInput
+		want int
+	}{
+		{"default", dataInput{}, 5},
+		{"custom", dataInput{Slices: 3}, 3},
+		{"clamped low", dataInput{Slices: 0}, 5},
+		{"clamped high", dataInput{Slices: 99}, 8},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, out, err := helloInteractiveData(context.Background(), nil, tt.in)
+			require.NoError(t, err)
+			require.Len(t, out.Data, tt.want)
+			for _, s := range out.Data {
+				assert.NotEmpty(t, s.Label)
+				assert.GreaterOrEqual(t, s.Value, float64(10))
+				assert.LessOrEqual(t, s.Value, float64(100))
+			}
+		})
+	}
 }
 
 func TestCallToolReturnsStructuredContent(t *testing.T) {

@@ -5,7 +5,11 @@ tmp_dir = "/build"
   cmd = "go build -o /build/tablekit ."
   bin = "/build/tablekit"
   args_bin = ["serve"]
-  include_ext = ["go"]
+  # go: source. html/json: the widgets build output (mcpserver/widgets/dist) is
+  # //go:embed-ed, so a widget rebuild must trigger a Go rebuild to re-embed.
+  include_ext = ["go", "html", "json"]
+  # Don't rebuild on OAuth/pairing state churn under data/ (it's all JSON).
+  exclude_dir = ["data", "build", "tmp"]
   delay = 1000
   stop_on_error = true
 
