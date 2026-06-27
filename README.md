@@ -135,8 +135,8 @@ core/
 │   └── services.go     # the Services bundle (config + store)
 └── http/               # the two Gin listeners
     ├── app/            # public engine
-    │   └── oauth/      # OAuth 2.1 — register, authorize, token, metadata
-    ├── mcp_route.go    # mounts the MCP server on /mcp behind the bearer guard
+    │   ├── oauth/      # OAuth 2.1 — register, authorize, token, metadata
+    │   └── mcp.go      # mounts the MCP server on /mcp behind the bearer guard
     └── control/        # control engine — root, health
 ```
 
