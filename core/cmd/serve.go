@@ -3,8 +3,8 @@ package cmd
 import (
 	"net/http"
 
-	"core/config"
 	"core/server"
+	"core/services"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -14,14 +14,17 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the HTTP server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := config.Load()
-		app, err := server.Build(cfg)
+		appServices, err := services.New()
+		if err != nil {
+			return err
+		}
+		app, err := server.Build(appServices)
 		if err != nil {
 			return err
 		}
 
-		appSrv := &http.Server{Addr: ":" + cfg.AppPort, Handler: app.AppEng}
-		controlSrv := &http.Server{Addr: ":" + cfg.ControlPort, Handler: app.Control}
+		appSrv := &http.Server{Addr: ":" + appServices.Config.AppPort, Handler: app.AppEng}
+		controlSrv := &http.Server{Addr: ":" + appServices.Config.ControlPort, Handler: app.Control}
 
 		g, ctx := errgroup.WithContext(cmd.Context())
 		g.Go(func() error { return listen(appSrv) })

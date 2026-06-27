@@ -10,9 +10,9 @@ import (
 	"math/rand"
 	"net/http"
 
-	"core/config"
 	"core/mcpserver/widgets"
 	"core/oauth"
+	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -193,7 +193,7 @@ func newServer() *mcp.Server {
 // The verifier validates our OAuth access JWT; the middleware enforces
 // expiration + scope and binds the session to the token's user, and emits a
 // WWW-Authenticate header pointing at the protected-resource metadata on 401.
-func Handler(cfg *config.Config, issuer *oauth.Issuer) http.Handler {
+func Handler(appServices *services.Services, issuer *oauth.Issuer) http.Handler {
 	server := newServer()
 
 	streamable := mcp.NewStreamableHTTPHandler(
@@ -225,6 +225,6 @@ func Handler(cfg *config.Config, issuer *oauth.Issuer) http.Handler {
 
 	return auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
 		Scopes:              []string{oauth.Scope},
-		ResourceMetadataURL: cfg.PublicBaseURL + "/.well-known/oauth-protected-resource",
+		ResourceMetadataURL: appServices.Config.PublicBaseURL + "/.well-known/oauth-protected-resource",
 	})(streamable)
 }

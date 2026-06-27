@@ -21,7 +21,7 @@ func (h *Handlers) handleToken(c *gin.Context) {
 		sendError(c, http.StatusUnauthorized, "invalid_client", "client_id is required")
 		return
 	}
-	client, err := h.store.GetClient(clientID)
+	client, err := h.appServices.Store.GetClient(clientID)
 	if err != nil || client == nil {
 		sendError(c, http.StatusUnauthorized, "invalid_client", "unknown client_id")
 		return
@@ -51,7 +51,7 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		return
 	}
 
-	authCode, err := h.store.ConsumeCode(code)
+	authCode, err := h.appServices.Store.ConsumeCode(code)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read code")
 		return
@@ -86,7 +86,7 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		InvalidatedBefore: time.Unix(0, 0),
 		CreatedAt:         time.Now(),
 	}
-	if err := h.store.NewChain(chain); err != nil {
+	if err := h.appServices.Store.NewChain(chain); err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not open chain")
 		return
 	}
@@ -114,7 +114,7 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 		return
 	}
 
-	chain, err := h.store.GetChain(claims.Chain)
+	chain, err := h.appServices.Store.GetChain(claims.Chain)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read chain")
 		return
@@ -131,12 +131,12 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 	issuedAt := claims.IssuedAt.Time
 	if !issuedAt.After(chain.InvalidatedBefore) {
 		// Replay of an already-rotated token: kill the whole chain.
-		_ = h.store.RevokeChain(chain.ID)
+		_ = h.appServices.Store.RevokeChain(chain.ID)
 		sendError(c, http.StatusBadRequest, "invalid_grant", "refresh token reuse detected")
 		return
 	}
 
-	if err := h.store.BumpCutoff(chain.ID, issuedAt); err != nil {
+	if err := h.appServices.Store.BumpCutoff(chain.ID, issuedAt); err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not rotate chain")
 		return
 	}
@@ -161,7 +161,7 @@ func (h *Handlers) issuePair(c *gin.Context, clientID, chainID, scope string) {
 		"access_token":  access,
 		"refresh_token": refresh,
 		"token_type":    "Bearer",
-		"expires_in":    int(h.cfg.AccessTTL.Seconds()),
+		"expires_in":    int(h.appServices.Config.AccessTTL.Seconds()),
 		"scope":         scope,
 	})
 }

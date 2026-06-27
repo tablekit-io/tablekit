@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"core/config"
+	"core/services"
 	"core/store"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,7 @@ func newIssuer(t *testing.T, cfg *config.Config) *Issuer {
 	t.Helper()
 	st, err := store.New(t.TempDir())
 	require.NoError(t, err)
-	iss, err := NewIssuer(cfg, st)
+	iss, err := NewIssuer(&services.Services{Config: cfg, Store: st})
 	require.NoError(t, err)
 	return iss
 }
@@ -141,9 +142,9 @@ func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {
 	// Two issuers, different stores, same external key → cross-verify.
 	stA, _ := newStore(t)
 	stB, _ := newStore(t)
-	issA, err := NewIssuer(cfg, stA)
+	issA, err := NewIssuer(&services.Services{Config: cfg, Store: stA})
 	require.NoError(t, err)
-	issB, err := NewIssuer(cfg, stB)
+	issB, err := NewIssuer(&services.Services{Config: cfg, Store: stB})
 	require.NoError(t, err)
 
 	tok, err := issA.IssueAccess("c", "ch", "mcp")
@@ -158,7 +159,7 @@ func TestEnvSigningKeyShortIsPadded(t *testing.T) {
 	cfg.SigningKey = base64.StdEncoding.EncodeToString([]byte("short-key"))
 
 	st, _ := newStore(t)
-	iss, err := NewIssuer(cfg, st)
+	iss, err := NewIssuer(&services.Services{Config: cfg, Store: st})
 	require.NoError(t, err)
 
 	tok, err := iss.IssueAccess("c", "ch", "mcp")
@@ -172,7 +173,7 @@ func TestEnvSigningKeyInvalidRejected(t *testing.T) {
 	cfg.SigningKey = "!!! not base64 !!!"
 
 	st, _ := newStore(t)
-	_, err := NewIssuer(cfg, st)
+	_, err := NewIssuer(&services.Services{Config: cfg, Store: st})
 	assert.Error(t, err)
 }
 
@@ -181,7 +182,7 @@ func TestEnvSigningKeyDoesNotWriteFile(t *testing.T) {
 	cfg.SigningKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 
 	st, dir := newStore(t)
-	_, err := NewIssuer(cfg, st)
+	_, err := NewIssuer(&services.Services{Config: cfg, Store: st})
 	require.NoError(t, err)
 
 	// Env key takes precedence; the store's key file is never created.

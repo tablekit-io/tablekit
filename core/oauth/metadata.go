@@ -9,7 +9,7 @@ import (
 // handleAuthServerMetadata serves RFC 8414 authorization-server metadata so
 // clients can discover the authorize/token/register endpoints.
 func (h *Handlers) handleAuthServerMetadata(c *gin.Context) {
-	base := h.cfg.PublicBaseURL
+	base := h.appServices.Config.PublicBaseURL
 	c.JSON(http.StatusOK, gin.H{
 		"issuer":                                base,
 		"authorization_endpoint":                base + "/oauth/authorize",
@@ -27,7 +27,7 @@ func (h *Handlers) handleAuthServerMetadata(c *gin.Context) {
 // Since the resource and authorization servers share one origin, both point at
 // PublicBaseURL.
 func (h *Handlers) handleProtectedResourceMetadata(c *gin.Context) {
-	base := h.cfg.PublicBaseURL
+	base := h.appServices.Config.PublicBaseURL
 	c.JSON(http.StatusOK, gin.H{
 		"resource":                 base,
 		"authorization_servers":    []string{base},

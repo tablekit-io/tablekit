@@ -5,31 +5,25 @@
 package server
 
 import (
-	"core/config"
 	"core/mcpserver"
 	"core/oauth"
 	"core/server/handlers"
-	"core/store"
+	"core/services"
 
 	"github.com/gin-gonic/gin"
 )
 
-// App holds the constructed engines and the config that drives the listeners.
+// App holds the constructed engines and the services that drive the listeners.
 type App struct {
-	Cfg     *config.Config
-	AppEng  *gin.Engine
-	Control *gin.Engine
+	Services *services.Services
+	AppEng   *gin.Engine
+	Control  *gin.Engine
 }
 
 // Build wires storage, OAuth and MCP into the two engines. It returns an error
 // if persistence or the signing key cannot be initialized.
-func Build(cfg *config.Config) (*App, error) {
-	st, err := store.New(cfg.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	oauthHandlers, err := oauth.NewHandlers(cfg, st)
+func Build(appServices *services.Services) (*App, error) {
+	oauthHandlers, err := oauth.NewHandlers(appServices)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +34,7 @@ func Build(cfg *config.Config) (*App, error) {
 	oauthHandlers.Register(appEng)
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.
-	mcpHandler := mcpserver.Handler(cfg, oauthHandlers.Issuer())
+	mcpHandler := mcpserver.Handler(appServices, oauthHandlers.Issuer())
 	appEng.Any("/mcp", gin.WrapH(mcpHandler))
 
 	control := gin.New()
@@ -48,5 +42,5 @@ func Build(cfg *config.Config) (*App, error) {
 	control.GET("/", handlers.Welcome("hello and welcome to the tablekit control server"))
 	control.GET("/health", handlers.Health)
 
-	return &App{Cfg: cfg, AppEng: appEng, Control: control}, nil
+	return &App{Services: appServices, AppEng: appEng, Control: control}, nil
 }

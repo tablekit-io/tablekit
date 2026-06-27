@@ -4,8 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"core/config"
-	"core/store"
+	"core/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,22 +12,21 @@ import (
 // Handlers serves the OAuth 2.1 endpoints. Construct with NewHandlers and mount
 // with Register.
 type Handlers struct {
-	cfg    *config.Config
-	store  *store.Store
-	issuer *Issuer
+	appServices *services.Services
+	issuer      *Issuer
 	// authorizeMu serializes the whole /authorize handler so the
 	// read-client → pair → issue-code sequence is atomic and two concurrent
 	// requests can never both win a pairing slot.
 	authorizeMu sync.Mutex
 }
 
-// NewHandlers wires the OAuth layer to its config, persistence and JWT issuer.
-func NewHandlers(cfg *config.Config, st *store.Store) (*Handlers, error) {
-	issuer, err := NewIssuer(cfg, st)
+// NewHandlers wires the OAuth layer to its services and JWT issuer.
+func NewHandlers(appServices *services.Services) (*Handlers, error) {
+	issuer, err := NewIssuer(appServices)
 	if err != nil {
 		return nil, err
 	}
-	return &Handlers{cfg: cfg, store: st, issuer: issuer}, nil
+	return &Handlers{appServices: appServices, issuer: issuer}, nil
 }
 
 // Issuer exposes the JWT issuer so the MCP layer can verify access tokens.

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"core/config"
+	"core/services"
 	"core/store"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -48,19 +49,20 @@ func init() {
 }
 
 // NewIssuer resolves the signing key: an externally provided base64 key
-// (cfg.SigningKey) wins, otherwise the store's generated/persisted key is used.
-func NewIssuer(cfg *config.Config, st *store.Store) (*Issuer, error) {
+// (config.SigningKey) wins, otherwise the store's generated/persisted key is used.
+func NewIssuer(appServices *services.Services) (*Issuer, error) {
+	configService := appServices.Config
 	var key []byte
 	var err error
-	if cfg.SigningKey != "" {
-		key, err = store.DecodeSigningKey(cfg.SigningKey)
+	if configService.SigningKey != "" {
+		key, err = store.DecodeSigningKey(configService.SigningKey)
 	} else {
-		key, err = st.SigningKey()
+		key, err = appServices.Store.SigningKey()
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &Issuer{cfg: cfg, key: key}, nil
+	return &Issuer{cfg: configService, key: key}, nil
 }
 
 type issueArgs struct {

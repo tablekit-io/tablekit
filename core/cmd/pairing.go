@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"core/config"
+	"core/services"
 	"core/store"
 
 	"github.com/spf13/cobra"
@@ -48,19 +48,18 @@ var pairingDisableCmd = &cobra.Command{
 // It targets the same DATA_DIR the server reads, so a running server picks up
 // the change on its next authorize.
 func applyPairingMode(mode string) error {
-	cfg := config.Load()
-	st, err := store.New(cfg.DataDir)
+	appServices, err := services.New()
 	if err != nil {
 		return err
 	}
-	if err := st.SetPairingMode(mode); err != nil {
+	if err := appServices.Store.SetPairingMode(mode); err != nil {
 		return err
 	}
-	_, paired, err := st.PairingStatus()
+	_, paired, err := appServices.Store.PairingStatus()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("pairing mode: %s (%d client(s) paired) [data dir: %s]\n", mode, len(paired), cfg.DataDir)
+	fmt.Printf("pairing mode: %s (%d client(s) paired) [data dir: %s]\n", mode, len(paired), appServices.Config.DataDir)
 	return nil
 }
 
