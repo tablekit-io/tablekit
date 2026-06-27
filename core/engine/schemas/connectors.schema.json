@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tablekit.io/schemas/connectors.schema.json",
+  "title": "Connectors",
+  "description": "Database connector configuration: a named map of connectors, each discriminated by `type`. Supported engines: PostgreSQL, MySQL, MariaDB.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["connectors"],
+  "properties": {
+    "connectors": {
+      "type": "object",
+      "description": "Connectors keyed by a unique connector name.",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "description": "Connector name: letters, digits, underscore, hyphen."
+      },
+      "additionalProperties": { "$ref": "#/$defs/connector" }
+    }
+  },
+  "$defs": {
+    "connector": {
+      "description": "A single connector, discriminated by `type`.",
+      "oneOf": [
+        { "$ref": "#/$defs/postgresConnector" },
+        { "$ref": "#/$defs/mysqlConnector" },
+        { "$ref": "#/$defs/mariadbConnector" }
+      ]
+    },
+    "postgresConnector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "details"],
+      "properties": {
+        "type": { "const": "postgres", "description": "Discriminator: PostgreSQL." },
+        "details": { "$ref": "#/$defs/postgresDetails" },
+        "tls": { "$ref": "#/$defs/tls" },
+        "ssh": { "$ref": "#/$defs/ssh" }
+      }
+    },
+    "mysqlConnector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "details"],
+      "properties": {
+        "type": { "const": "mysql", "description": "Discriminator: MySQL." },
+        "details": { "$ref": "#/$defs/mysqlDetails" },
+        "tls": { "$ref": "#/$defs/tls" },
+        "ssh": { "$ref": "#/$defs/ssh" }
+      }
+    },
+    "mariadbConnector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "details"],
+      "properties": {
+        "type": { "const": "mariadb", "description": "Discriminator: MariaDB. Wire-compatible with MySQL but kept distinct for flavour-specific behavior." },
+        "details": { "$ref": "#/$defs/mariadbDetails" },
+        "tls": { "$ref": "#/$defs/tls" },
+        "ssh": { "$ref": "#/$defs/ssh" }
+      }
+    },
+    "postgresDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "username"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1, "description": "Server hostname or IP. When `ssh` is set, this is the database address as reachable from the SSH host." },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 5432, "description": "TCP port. PostgreSQL default 5432." },
+        "database": { "type": "string", "default": "postgres", "description": "Database name. PostgreSQL default `postgres`." },
+        "username": { "type": "string", "minLength": 1, "default": "postgres", "description": "Login user. PostgreSQL default `postgres`." },
+        "password": { "$ref": "#/$defs/secret", "description": "Login password. Omit for trust/peer/IAM auth." }
+      }
+    },
+    "mysqlDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "username"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1, "description": "Server hostname or IP. When `ssh` is set, this is the database address as reachable from the SSH host." },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 3306, "description": "TCP port. MySQL default 3306." },
+        "database": { "type": "string", "description": "Database name. MySQL has no implicit default database." },
+        "username": { "type": "string", "minLength": 1, "default": "root", "description": "Login user. MySQL default `root`." },
+        "password": { "$ref": "#/$defs/secret", "description": "Login password." }
+      }
+    },
+    "mariadbDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "username"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1, "description": "Server hostname or IP. When `ssh` is set, this is the database address as reachable from the SSH host." },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 3306, "description": "TCP port. MariaDB default 3306." },
+        "database": { "type": "string", "description": "Database name. MariaDB has no implicit default database." },
+        "username": { "type": "string", "minLength": 1, "default": "root", "description": "Login user. MariaDB default `root`." },
+        "password": { "$ref": "#/$defs/secret", "description": "Login password." }
+      }
+    },
+    "secret": {
+      "description": "A secret value. Either a literal string, or an object naming where to read it from. A bare string is shorthand for { \"from\": \"literal\", \"value\": <string> }.",
+      "oneOf": [
+        { "type": "string", "description": "Shorthand for a literal secret value." },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "env"],
+          "properties": {
+            "from": { "const": "env", "description": "Read the secret from an environment variable." },
+            "env": { "type": "string", "minLength": 1, "description": "Name of the environment variable holding the secret." }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "path"],
+          "properties": {
+            "from": { "const": "file", "description": "Read the secret from a file." },
+            "path": { "type": "string", "minLength": 1, "description": "Path to a file whose (trimmed) contents are the secret." }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "value"],
+          "properties": {
+            "from": { "const": "literal", "description": "Use the secret value inline." },
+            "value": { "type": "string", "description": "The secret value." }
+          }
+        }
+      ]
+    },
+    "sslmode": {
+      "type": "string",
+      "enum": ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"],
+      "default": "prefer",
+      "description": "PostgreSQL-style SSL mode. disable: no TLS. allow: plaintext, TLS only if forced by server. prefer (default): TLS if the server offers it, silent plaintext fallback otherwise. require: TLS but no certificate verification. verify-ca: verify the server certificate chain against the CA. verify-full: verify the chain AND the hostname. For MySQL/MariaDB, any value other than disable enables TLS; verify-ca/verify-full enforce certificate validation."
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "TLS / SSL settings. Certificate and key paths are PEM files on the machine running the connector.",
+      "properties": {
+        "mode": { "$ref": "#/$defs/sslmode" },
+        "rootCertFilePath": { "type": "string", "minLength": 1, "description": "Path to the CA root certificate (PEM) used to verify the server. libpq sslrootcert / Node `ca`. Typically required for verify-ca/verify-full against a private CA." },
+        "clientCertFilePath": { "type": "string", "minLength": 1, "description": "Path to the client certificate (PEM) for mutual TLS. libpq sslcert / Node `cert`." },
+        "clientKeyFilePath": { "type": "string", "minLength": 1, "description": "Path to the client private key (PEM) for mutual TLS. libpq sslkey / Node `key`." }
+      },
+      "dependentRequired": {
+        "clientCertFilePath": ["clientKeyFilePath"],
+        "clientKeyFilePath": ["clientCertFilePath"]
+      }
+    },
+    "ssh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "sshKeyFilePath"],
+      "description": "Optional SSH tunnel through a bastion/jump host. The connector opens a local port forward through this host to `details.host:details.port`.",
+      "properties": {
+        "host": { "type": "string", "minLength": 1, "description": "SSH bastion / jump host." },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 22, "description": "SSH port. Default 22." },
+        "username": { "type": "string", "minLength": 1, "description": "SSH user. Defaults to the current OS user ($USER) when omitted." },
+        "sshKeyFilePath": { "type": "string", "minLength": 1, "description": "Path to the SSH private key (OpenSSH/PEM)." },
+        "passphrase": { "$ref": "#/$defs/secret", "description": "Passphrase for the SSH private key, if it is encrypted. Leave unset for an unencrypted key." }
+      }
+    }
+  },
+  "examples": [
+    {
+      "connectors": {
+        "primary": {
+          "type": "postgres",
+          "details": { "host": "db.internal", "database": "app", "username": "app_ro", "password": "secret" },
+          "tls": { "mode": "verify-full", "rootCertFilePath": "/etc/ssl/db-ca.pem" }
+        },
+        "analytics": {
+          "type": "mysql",
+          "details": { "host": "10.0.0.5", "username": "reader" },
+          "ssh": { "host": "bastion.example.com", "username": "deploy", "sshKeyFilePath": "~/.ssh/id_ed25519" }
+        }
+      }
+    }
+  ]
+}
