@@ -1,45 +1,45 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tablekit.io/schemas/connectors.schema.json",
-  "title": "Connectors",
-  "description": "Database connector configuration: a named map of connectors, each discriminated by `type`. Supported engines: PostgreSQL, MySQL, MariaDB.",
+  "$id": "https://tablekit.io/schemas/databases.schema.json",
+  "title": "Databases",
+  "description": "Database configuration: a named map of databases, each discriminated by `type`. Supported engines: PostgreSQL, MySQL, MariaDB.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "connectors"
+    "databases"
   ],
   "properties": {
-    "connectors": {
+    "databases": {
       "type": "object",
-      "description": "Connectors keyed by a unique connector name.",
+      "description": "Databases keyed by a unique name.",
       "minProperties": 1,
       "propertyNames": {
         "type": "string",
         "minLength": 1,
         "pattern": "^[A-Za-z0-9_-]+$",
-        "description": "Connector name: letters, digits, underscore, hyphen."
+        "description": "Database name: letters, digits, underscore, hyphen."
       },
       "additionalProperties": {
-        "$ref": "#/$defs/connector"
+        "$ref": "#/$defs/database"
       }
     }
   },
   "$defs": {
-    "connector": {
-      "description": "A single connector, discriminated by `type`.",
+    "database": {
+      "description": "A single database, discriminated by `type`.",
       "oneOf": [
         {
-          "$ref": "#/$defs/postgresConnector"
+          "$ref": "#/$defs/postgresDatabase"
         },
         {
-          "$ref": "#/$defs/mysqlConnector"
+          "$ref": "#/$defs/mysqlDatabase"
         },
         {
-          "$ref": "#/$defs/mariadbConnector"
+          "$ref": "#/$defs/mariadbDatabase"
         }
       ]
     },
-    "postgresConnector": {
+    "postgresDatabase": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -81,7 +81,7 @@
         }
       }
     },
-    "mysqlConnector": {
+    "mysqlDatabase": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -123,7 +123,7 @@
         }
       }
     },
-    "mariadbConnector": {
+    "mariadbDatabase": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -355,7 +355,7 @@
     "tls": {
       "type": "object",
       "additionalProperties": false,
-      "description": "TLS / SSL settings. Certificate and key paths are PEM files on the machine running the connector.",
+      "description": "TLS / SSL settings. Certificate and key paths are PEM files on the machine running the database connection.",
       "properties": {
         "mode": {
           "$ref": "#/$defs/sslmode"
@@ -392,7 +392,7 @@
         "host",
         "sshKeyFilePath"
       ],
-      "description": "Optional SSH tunnel through a bastion/jump host. The connector opens a local port forward through this host to `details.host:details.port`.",
+      "description": "Optional SSH tunnel through a bastion/jump host. A local port forward is opened through this host to `details.host:details.port`.",
       "properties": {
         "host": {
           "type": "string",
@@ -425,7 +425,7 @@
   },
   "examples": [
     {
-      "connectors": {
+      "databases": {
         "primary": {
           "type": "postgres",
           "details": {

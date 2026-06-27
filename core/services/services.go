@@ -5,6 +5,9 @@
 package services
 
 import (
+	"time"
+
+	"core/engine"
 	"core/services/config"
 	"core/services/store"
 )
@@ -13,14 +16,28 @@ import (
 type Services struct {
 	Config *config.Config
 	Store  *store.Store
+	Engine *engine.Service
 }
 
-// New loads config from the environment and opens the on-disk store.
+// New loads config from the environment, opens the on-disk store, and loads the
+// configured databases.
 func New() (*Services, error) {
 	configService := config.Load()
 	storageService, err := store.New(configService.DataDir)
 	if err != nil {
 		return nil, err
 	}
-	return &Services{Config: configService, Store: storageService}, nil
+	engineService, err := engine.Load(configService.DatabasesFile, engine.Limits{
+		StatementTimeout: 10 * time.Second,
+		MaxRows:          2048,
+		MaxBytes:         64 * 1024,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Services{
+		Config: configService,
+		Store:  storageService,
+		Engine: engineService,
+	}, nil
 }

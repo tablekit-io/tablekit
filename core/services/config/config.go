@@ -4,6 +4,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -22,6 +23,9 @@ type Config struct {
 	PublicBaseURL string
 	// DataDir holds the gitignored JSON state (clients, tokens, signing key).
 	DataDir string
+	// DatabasesFile is the YAML file declaring the databases run_sql can query.
+	// Defaults to DATA_DIR/databases.yaml; a missing file means no databases.
+	DatabasesFile string
 	// SigningKey, if set, is a base64-encoded HS256 secret supplied externally;
 	// it takes precedence over the generated DATA_DIR/signing.key. Shorter keys
 	// are zero-padded to 32 bytes.
@@ -34,11 +38,13 @@ type Config struct {
 
 // Load reads configuration from the environment, applying defaults.
 func Load() *Config {
+	dataDir := envOrDefault("DATA_DIR", "./data")
 	return &Config{
 		AppPort:       envOrDefault("APP_PORT", "8080"),
 		ControlPort:   envOrDefault("CONTROL_PORT", "8081"),
 		PublicBaseURL: strings.TrimRight(envOrDefault("PUBLIC_BASE_URL", "http://localhost:8080"), "/"),
-		DataDir:       envOrDefault("DATA_DIR", "./data"),
+		DataDir:       dataDir,
+		DatabasesFile: envOrDefault("DATABASES_FILE", filepath.Join(dataDir, "databases.yaml")),
 		SigningKey:    os.Getenv("SIGNING_KEY"),
 		AccessTTL:     durationOrDefault("ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:    durationOrDefault("REFRESH_TTL", 7*24*time.Hour),

@@ -28,6 +28,8 @@ func (h *Handlers) Register(s *mcp.Server) {
 	h.registerHelloWorld(s)
 	h.registerHelloWorldInteractive(s)
 	h.registerHelloWorldInteractiveData(s)
+	h.registerListDatabases(s)
+	h.registerRunSQL(s)
 	registerWidgetResources(s)
 }
 
