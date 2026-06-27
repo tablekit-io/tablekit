@@ -123,6 +123,55 @@ go test ./...        # unit + e2e suite
 go test -race ./...  # the pairing path is concurrency-sensitive
 ```
 
+### Running e2e tests (throw-away database containers)
+
+The e2e suite spins up disposable Postgres/MySQL containers to test against real
+engines, then tears them down. It does this by driving the **host's** Docker
+daemon from inside the `core` container (Docker-outside-of-Docker): the `core`
+image ships the `docker` CLI, and `docker-compose.yml` bind-mounts the host
+socket (`/var/run/docker.sock`) into it. Containers it starts are therefore
+plain siblings on your host daemon — you can see them with `docker ps` and, if a
+test crashes mid-run, clean them up with `docker rm -f` on the host.
+
+Database containers are attached to the stable `tablekit` network (exposed to
+the suite as `TABLEKIT_E2E_DOCKER_NETWORK`), which `core` is also on, so the
+test reaches a database by container name over that network — no port
+publishing:
+
+```bash
+# what the suite does, roughly:
+docker run -d --network tablekit --name testdb-<rand> -e POSTGRES_PASSWORD=pw postgres:16
+# … core connects to  testdb-<rand>:5432  …
+docker rm -f testdb-<rand>
+```
+
+Sanity-check the wiring once the stack is up:
+
+```bash
+docker compose exec core docker version       # reports a *Server* version → socket reaches the host daemon
+docker compose exec core docker run --rm hello-world
+```
+
+#### Per-OS setup
+
+- **Linux** — works out of the box: the socket is at `/var/run/docker.sock` and
+  the container runs as root (so it can use the root-owned socket).
+  `host.docker.internal` needs Docker Engine ≥ 20.10. Running **rootless
+  Docker**? Your socket lives at `$XDG_RUNTIME_DIR/docker.sock` — point the bind
+  mount's `source` there instead.
+- **macOS (Docker Desktop)** — enable **Settings → Advanced → "Allow the default
+  Docker socket to be used"** so `/var/run/docker.sock` exists on the host for
+  the bind mount. `host.docker.internal` resolves natively.
+- **Windows (Docker Desktop + WSL2)** — use the **WSL2 backend** and run
+  `docker compose` **from inside a WSL2 distro** (not PowerShell/CMD) so the
+  Linux socket path `/var/run/docker.sock` is valid. Enable the same "default
+  Docker socket" setting. Native Windows containers / the `npipe` socket are not
+  supported by this setup.
+
+If a test can't use the shared network, the fallback is to publish the DB port
+(`-p`) and connect via `host.docker.internal:<port>` (the `host-gateway`
+mapping in `docker-compose.yml` makes that name resolve on Linux too).
+
 ```
 core/
 ├── cli/                # tablekit CLI — serve, pairing
