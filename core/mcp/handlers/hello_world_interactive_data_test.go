@@ -9,6 +9,7 @@ import (
 )
 
 func TestInteractiveDataReturnsRandomSlices(t *testing.T) {
+	h := &Handlers{}
 	tests := []struct {
 		name string
 		in   dataInput
@@ -21,7 +22,7 @@ func TestInteractiveDataReturnsRandomSlices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, out, err := helloInteractiveData(context.Background(), nil, tt.in)
+			_, out, err := h.helloInteractiveData(context.Background(), nil, tt.in)
 			require.NoError(t, err)
 			require.Len(t, out.Data, tt.want)
 			for _, s := range out.Data {

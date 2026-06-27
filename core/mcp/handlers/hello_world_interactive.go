@@ -25,7 +25,7 @@ type helloInteractiveOutput struct {
 // helloInteractive renders the interactive donut widget. The structured result
 // is only a discriminator; the real payload is loaded by the widget calling the
 // app-only hello_world_interactive_data tool over the bridge.
-func helloInteractive(_ context.Context, _ *mcp.CallToolRequest, _ helloInteractiveInput) (*mcp.CallToolResult, helloInteractiveOutput, error) {
+func (h *Handlers) helloInteractive(_ context.Context, _ *mcp.CallToolRequest, _ helloInteractiveInput) (*mcp.CallToolResult, helloInteractiveOutput, error) {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{
 			Text: "Rendering an interactive donut chart with random example data.",
@@ -37,7 +37,7 @@ func helloInteractive(_ context.Context, _ *mcp.CallToolRequest, _ helloInteract
 // donut widget. The _meta.ui.resourceUri links the widget the host prefetches
 // and renders; it's resolved from the build manifest (empty until widgets are
 // built, in which case the tool simply advertises no widget).
-func registerHelloWorldInteractive(s *mcp.Server) {
+func (h *Handlers) registerHelloWorldInteractive(s *mcp.Server) {
 	interactive := &mcp.Tool{
 		Name:        "hello_world_interactive",
 		Description: "Renders an interactive donut chart with random example data, using MCP Apps.",
@@ -51,5 +51,5 @@ func registerHelloWorldInteractive(s *mcp.Server) {
 	if uri := ui.WidgetURI(helloInteractiveWidget); uri != "" {
 		interactive.Meta = mcp.Meta{"ui": map[string]any{"resourceUri": uri}}
 	}
-	mcp.AddTool(s, interactive, helloInteractive)
+	mcp.AddTool(s, interactive, h.helloInteractive)
 }

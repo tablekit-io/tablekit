@@ -20,7 +20,7 @@ type helloOutput struct {
 
 // helloWorld returns a greeting both as human-readable text and as structured
 // output validated against helloOutput's schema.
-func helloWorld(_ context.Context, _ *mcp.CallToolRequest, in helloInput) (*mcp.CallToolResult, helloOutput, error) {
+func (h *Handlers) helloWorld(_ context.Context, _ *mcp.CallToolRequest, in helloInput) (*mcp.CallToolResult, helloOutput, error) {
 	name := in.Name
 	if name == "" {
 		name = "world"
@@ -32,7 +32,7 @@ func helloWorld(_ context.Context, _ *mcp.CallToolRequest, in helloInput) (*mcp.
 }
 
 // registerHelloWorld adds the hello_world tool to the server.
-func registerHelloWorld(s *mcp.Server) {
+func (h *Handlers) registerHelloWorld(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "hello_world",
 		Description: "Returns a friendly greeting, optionally addressed to a name.",
@@ -45,5 +45,5 @@ func registerHelloWorld(s *mcp.Server) {
 			DestructiveHint: pointer(false),
 			OpenWorldHint:   pointer(false),
 		},
-	}, helloWorld)
+	}, h.helloWorld)
 }

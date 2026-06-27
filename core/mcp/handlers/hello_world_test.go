@@ -10,6 +10,7 @@ import (
 )
 
 func TestHelloWorld(t *testing.T) {
+	h := &Handlers{}
 	tests := []struct {
 		name string
 		in   helloInput
@@ -20,7 +21,7 @@ func TestHelloWorld(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, out, err := helloWorld(context.Background(), nil, tt.in)
+			result, out, err := h.helloWorld(context.Background(), nil, tt.in)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, out.Greeting)
 			require.Len(t, result.Content, 1)

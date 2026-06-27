@@ -6,7 +6,6 @@ package http
 
 import (
 	"core/http/app"
-	"core/http/app/oauth"
 	"core/http/control"
 	"core/services"
 
@@ -20,28 +19,19 @@ type App struct {
 	ControlEngine *gin.Engine
 }
 
-// Build wires storage, OAuth and MCP into the two engines. It returns an error
-// if persistence or the signing key cannot be initialized.
+// Build constructs the two engines and hands each its registration function and
+// the shared services. It returns an error if the app engine's OAuth layer
+// (persistence or signing key) cannot be initialized.
 func Build(appServices *services.Services) (*App, error) {
-	oauthHandlers, err := oauth.NewHandlers(appServices)
-	if err != nil {
+	appEngine := gin.New()
+	appEngine.Use(gin.Logger(), gin.Recovery())
+	if err := app.RegisterHandlers(appEngine, appServices); err != nil {
 		return nil, err
 	}
 
-	appEngine := gin.New()
-	appEngine.Use(gin.Logger(), gin.Recovery())
-	appEngine.GET("/", control.Welcome("hello and welcome to the tablekit MCP server"))
-	oauthHandlers.Register(appEngine)
-
-	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
-	// adapts them. /mcp must accept GET, POST and DELETE.
-	mcpHandler := app.MCPRoute(appServices, oauthHandlers.Issuer())
-	appEngine.Any("/mcp", gin.WrapH(mcpHandler))
-
 	controlEngine := gin.New()
 	controlEngine.Use(gin.Logger(), gin.Recovery())
-	controlEngine.GET("/", control.Welcome("hello and welcome to the tablekit control server"))
-	controlEngine.GET("/health", control.Health)
+	control.RegisterHandlers(controlEngine, appServices)
 
 	return &App{Services: appServices, AppEngine: appEngine, ControlEngine: controlEngine}, nil
 }

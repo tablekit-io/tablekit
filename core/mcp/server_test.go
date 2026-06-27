@@ -18,7 +18,8 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	ctx := context.Background()
 	serverT, clientT := mcp.NewInMemoryTransports()
 
-	server := newServer()
+	// Tools don't touch Services yet, so a nil bundle is fine for protocol tests.
+	server := newServer(nil)
 	ss, err := server.Connect(ctx, serverT, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ss.Close() })

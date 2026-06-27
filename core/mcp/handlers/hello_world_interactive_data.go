@@ -28,7 +28,7 @@ type dataOutput struct {
 // helloInteractiveData is the example data loader: it returns a random dataset
 // for the donut. App-only — hidden from the model, called only by the widget
 // over the MCP Apps bridge.
-func helloInteractiveData(_ context.Context, _ *mcp.CallToolRequest, in dataInput) (*mcp.CallToolResult, dataOutput, error) {
+func (h *Handlers) helloInteractiveData(_ context.Context, _ *mcp.CallToolRequest, in dataInput) (*mcp.CallToolResult, dataOutput, error) {
 	n := in.Slices
 	if n < 1 {
 		n = 5
@@ -53,7 +53,7 @@ func helloInteractiveData(_ context.Context, _ *mcp.CallToolRequest, in dataInpu
 // registerHelloWorldInteractiveData adds the example data loader. The
 // _meta.ui.visibility=['app'] marks it app-only — the host hides it from the
 // model and only honours it when the widget calls it over the bridge.
-func registerHelloWorldInteractiveData(s *mcp.Server) {
+func (h *Handlers) registerHelloWorldInteractiveData(s *mcp.Server) {
 	dataTool := &mcp.Tool{
 		Name:        "hello_world_interactive_data",
 		Description: "Returns random example data for the hello_world_interactive donut. App-only: called by the widget over the MCP Apps bridge, hidden from the agent.",
@@ -64,5 +64,5 @@ func registerHelloWorldInteractiveData(s *mcp.Server) {
 		},
 	}
 	dataTool.Meta = mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
-	mcp.AddTool(s, dataTool, helloInteractiveData)
+	mcp.AddTool(s, dataTool, h.helloInteractiveData)
 }
