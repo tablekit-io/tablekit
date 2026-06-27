@@ -32,14 +32,14 @@ import (
 var binPath string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "tablekit-e2e-bin")
+	directory, err := os.MkdirTemp("", "tablekit-e2e-bin")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mktemp:", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(directory)
 
-	binPath = filepath.Join(dir, "tablekit")
+	binPath = filepath.Join(directory, "tablekit")
 	build := exec.Command("go", "build", "-o", binPath, ".")
 	build.Dir = moduleRoot()
 	build.Stderr = os.Stderr
@@ -109,10 +109,10 @@ func waitHealthy(t *testing.T, controlURL string) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(controlURL + "/health")
+		response, err := http.Get(controlURL + "/health")
 		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK {
 				return
 			}
 		}
@@ -129,14 +129,14 @@ const testRedirectURI = "http://127.0.0.1:9999/callback"
 func register(t *testing.T, appURL string) string {
 	t.Helper()
 	body := `{"redirect_uris":["` + testRedirectURI + `"]}`
-	resp, err := http.Post(appURL+"/register", "application/json", strings.NewReader(body))
+	response, err := http.Post(appURL+"/register", "application/json", strings.NewReader(body))
 	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	defer response.Body.Close()
+	require.Equal(t, http.StatusCreated, response.StatusCode)
 	var out struct {
 		ClientID string `json:"client_id"`
 	}
-	require.NoError(t, decode(resp, &out))
+	require.NoError(t, decode(response, &out))
 	require.NotEmpty(t, out.ClientID)
 	return out.ClientID
 }
@@ -157,32 +157,32 @@ func pkcePair(t *testing.T) (verifier, challenge string) {
 // response so callers can inspect the Location (code) or the already-paired page.
 func authorize(t *testing.T, appURL, clientID, challenge, state string) *http.Response {
 	t.Helper()
-	q := url.Values{}
-	q.Set("response_type", "code")
-	q.Set("client_id", clientID)
-	q.Set("redirect_uri", testRedirectURI)
-	q.Set("code_challenge", challenge)
-	q.Set("code_challenge_method", "S256")
+	query := url.Values{}
+	query.Set("response_type", "code")
+	query.Set("client_id", clientID)
+	query.Set("redirect_uri", testRedirectURI)
+	query.Set("code_challenge", challenge)
+	query.Set("code_challenge_method", "S256")
 	if state != "" {
-		q.Set("state", state)
+		query.Set("state", state)
 	}
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(appURL + "/oauth/authorize?" + q.Encode())
+	response, err := client.Get(appURL + "/oauth/authorize?" + query.Encode())
 	require.NoError(t, err)
-	return resp
+	return response
 }
 
 // authorizeCode runs authorize and extracts the code from the 302 Location.
 func authorizeCode(t *testing.T, appURL, clientID, challenge string) string {
 	t.Helper()
-	resp := authorize(t, appURL, clientID, challenge, "")
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusFound, resp.StatusCode)
-	loc, err := url.Parse(resp.Header.Get("Location"))
+	response := authorize(t, appURL, clientID, challenge, "")
+	defer response.Body.Close()
+	require.Equal(t, http.StatusFound, response.StatusCode)
+	location, err := url.Parse(response.Header.Get("Location"))
 	require.NoError(t, err)
-	code := loc.Query().Get("code")
+	code := location.Query().Get("code")
 	require.NotEmpty(t, code)
 	return code
 }
@@ -190,12 +190,12 @@ func authorizeCode(t *testing.T, appURL, clientID, challenge string) string {
 // postForm POSTs urlencoded values, returning status and parsed JSON body.
 func postForm(t *testing.T, endpoint string, form url.Values) (int, map[string]any) {
 	t.Helper()
-	resp, err := http.PostForm(endpoint, form)
+	response, err := http.PostForm(endpoint, form)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer response.Body.Close()
 	var body map[string]any
-	_ = decode(resp, &body)
-	return resp.StatusCode, body
+	_ = decode(response, &body)
+	return response.StatusCode, body
 }
 
 // exchangeCode redeems an authorization code for tokens.
@@ -231,10 +231,10 @@ type bearerRT struct {
 	base  http.RoundTripper
 }
 
-func (b bearerRT) RoundTrip(req *http.Request) (*http.Response, error) {
-	req = req.Clone(req.Context())
-	req.Header.Set("Authorization", "Bearer "+b.token)
-	return b.base.RoundTrip(req)
+func (b bearerRT) RoundTrip(request *http.Request) (*http.Response, error) {
+	request = request.Clone(request.Context())
+	request.Header.Set("Authorization", "Bearer "+b.token)
+	return b.base.RoundTrip(request)
 }
 
 // runCLI runs the binary with a subcommand against the given data dir.
@@ -246,8 +246,8 @@ func runCLI(t *testing.T, dataDir string, args ...string) {
 	require.NoError(t, err, "cli %v failed: %s", args, out)
 }
 
-func decode(resp *http.Response, v any) error {
-	data, err := io.ReadAll(resp.Body)
+func decode(response *http.Response, v any) error {
+	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,6 @@ var templatesFS embed.FS
 
 // alreadyPairedTmpl renders the "already paired" page. Parsed once at init;
 // html/template applies context-aware escaping to the interpolated redirect URL.
-var alreadyPairedTmpl = template.Must(
+var alreadyPairedTemplate = template.Must(
 	template.ParseFS(templatesFS, "templates/already_paired.html"),
 )

@@ -1,10 +1,10 @@
-package mcpserver
+package mcp
 
 import (
 	"context"
 	"testing"
 
-	"core/mcpserver/widgets"
+	"core/http/app/mcp/widgets"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -22,11 +22,11 @@ func TestHelloWorld(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, out, err := helloWorld(context.Background(), nil, tt.in)
+			result, out, err := helloWorld(context.Background(), nil, tt.in)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, out.Greeting)
-			require.Len(t, res.Content, 1)
-			text, ok := res.Content[0].(*mcp.TextContent)
+			require.Len(t, result.Content, 1)
+			text, ok := result.Content[0].(*mcp.TextContent)
 			require.True(t, ok)
 			assert.Equal(t, tt.want, text.Text)
 		})
@@ -46,28 +46,28 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { _ = ss.Close() })
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	cs, err := client.Connect(ctx, clientT, nil)
+	clientSession, err := client.Connect(ctx, clientT, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
-	return cs
+	t.Cleanup(func() { _ = clientSession.Close() })
+	return clientSession
 }
 
 // toolsByName lists the server's tools and indexes them by name.
-func toolsByName(t *testing.T, cs *mcp.ClientSession) map[string]*mcp.Tool {
+func toolsByName(t *testing.T, clientSession *mcp.ClientSession) map[string]*mcp.Tool {
 	t.Helper()
-	res, err := cs.ListTools(context.Background(), &mcp.ListToolsParams{})
+	result, err := clientSession.ListTools(context.Background(), &mcp.ListToolsParams{})
 	require.NoError(t, err)
-	byName := make(map[string]*mcp.Tool, len(res.Tools))
-	for _, tool := range res.Tools {
+	byName := make(map[string]*mcp.Tool, len(result.Tools))
+	for _, tool := range result.Tools {
 		byName[tool.Name] = tool
 	}
 	return byName
 }
 
 func TestListToolsExposesAnnotationsAndSchema(t *testing.T) {
-	cs := connectInMemory(t)
+	clientSession := connectInMemory(t)
 
-	tool := toolsByName(t, cs)["hello_world"]
+	tool := toolsByName(t, clientSession)["hello_world"]
 	require.NotNil(t, tool)
 	assert.NotNil(t, tool.OutputSchema, "tool should advertise an output schema")
 
@@ -90,8 +90,8 @@ func uiMeta(tool *mcp.Tool) map[string]any {
 }
 
 func TestInteractiveToolsRegistered(t *testing.T) {
-	cs := connectInMemory(t)
-	tools := toolsByName(t, cs)
+	clientSession := connectInMemory(t)
+	tools := toolsByName(t, clientSession)
 
 	// Build-independent: both tools are always registered.
 	require.NotNil(t, tools["hello_world_interactive"])
@@ -123,8 +123,8 @@ func TestWidgetResourceIsServed(t *testing.T) {
 		t.Skip("no built widgets in embed dir (run `bun run build` in widgets/)")
 	}
 
-	cs := connectInMemory(t)
-	list, err := cs.ListResources(context.Background(), &mcp.ListResourcesParams{})
+	clientSession := connectInMemory(t)
+	list, err := clientSession.ListResources(context.Background(), &mcp.ListResourcesParams{})
 	require.NoError(t, err)
 
 	var uri string
@@ -136,7 +136,7 @@ func TestWidgetResourceIsServed(t *testing.T) {
 	}
 	require.NotEmpty(t, uri, "widget resource should be listed")
 
-	read, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	read, err := clientSession.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
 	require.NoError(t, err)
 	require.Len(t, read.Contents, 1)
 	assert.Contains(t, read.Contents[0].Text, "<html", "resource should serve the widget HTML")
@@ -168,21 +168,21 @@ func TestInteractiveDataReturnsRandomSlices(t *testing.T) {
 }
 
 func TestCallToolReturnsStructuredContent(t *testing.T) {
-	cs := connectInMemory(t)
+	clientSession := connectInMemory(t)
 
-	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "hello_world",
 		Arguments: map[string]any{"name": "omran"},
 	})
 	require.NoError(t, err)
-	assert.False(t, res.IsError)
+	assert.False(t, result.IsError)
 
-	require.Len(t, res.Content, 1)
-	text, ok := res.Content[0].(*mcp.TextContent)
+	require.Len(t, result.Content, 1)
+	text, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Equal(t, "Hello, omran!", text.Text)
 
-	structured, ok := res.StructuredContent.(map[string]any)
+	structured, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "Hello, omran!", structured["greeting"])
 }

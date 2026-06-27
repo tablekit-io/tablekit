@@ -10,8 +10,8 @@ import (
 )
 
 func TestNewWiresConfigAndStore(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("DATA_DIR", dir)
+	directory := t.TempDir()
+	t.Setenv("DATA_DIR", directory)
 	t.Setenv("SIGNING_KEY", "") // force the store-backed key path
 
 	appServices, err := New()
@@ -20,7 +20,7 @@ func TestNewWiresConfigAndStore(t *testing.T) {
 	require.NotNil(t, appServices.Config)
 	require.NotNil(t, appServices.Store)
 	// Config is loaded from the environment we set above...
-	assert.Equal(t, dir, appServices.Config.DataDir)
+	assert.Equal(t, directory, appServices.Config.DataDir)
 	// ...and the store is opened against that same data dir.
 	_, err = appServices.Store.SigningKey()
 	require.NoError(t, err)

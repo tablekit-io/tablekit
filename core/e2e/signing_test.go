@@ -20,24 +20,24 @@ func TestEnvSigningKey(t *testing.T) {
 	_, err := rand.Read(key)
 	require.NoError(t, err)
 
-	srv := startServerEnv(t, "SIGNING_KEY="+base64.StdEncoding.EncodeToString(key))
+	server := startServerEnv(t, "SIGNING_KEY="+base64.StdEncoding.EncodeToString(key))
 
-	_, tokens := fullHandshake(t, srv.appURL)
+	_, tokens := fullHandshake(t, server.appURL)
 	token := tokens["access_token"].(string)
 
-	cs, err := connect(t, srv.appURL, bearerClient(token))
+	clientSession, err := connect(t, server.appURL, bearerClient(token))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
+	t.Cleanup(func() { _ = clientSession.Close() })
 
-	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "hello_world",
 		Arguments: map[string]any{"name": "key"},
 	})
 	require.NoError(t, err)
-	text, ok := res.Content[0].(*mcp.TextContent)
+	text, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Equal(t, "Hello, key!", text.Text)
 
 	// The env key takes precedence, so no key file is generated.
-	assert.NoFileExists(t, filepath.Join(srv.dataDir, "signing.key"))
+	assert.NoFileExists(t, filepath.Join(server.dataDir, "signing.key"))
 }

@@ -15,56 +15,56 @@ func pairs(t *testing.T, appURL string) bool {
 	t.Helper()
 	clientID := register(t, appURL)
 	_, challenge := pkcePair(t)
-	resp := authorize(t, appURL, clientID, challenge, "")
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusFound &&
-		resp.Header.Get("Location") != ""
+	response := authorize(t, appURL, clientID, challenge, "")
+	defer response.Body.Close()
+	return response.StatusCode == http.StatusFound &&
+		response.Header.Get("Location") != ""
 }
 
 func TestPairingDefaultOnce(t *testing.T) {
-	srv := startServer(t)
+	server := startServer(t)
 
 	// First client pairs.
-	assert.True(t, pairs(t, srv.appURL))
+	assert.True(t, pairs(t, server.appURL))
 
 	// Second (different) client is refused with the already-paired page that
 	// bounces back to the client with an OAuth error.
-	clientID := register(t, srv.appURL)
+	clientID := register(t, server.appURL)
 	_, challenge := pkcePair(t)
-	resp := authorize(t, srv.appURL, clientID, challenge, "")
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	html, _ := io.ReadAll(resp.Body)
+	response := authorize(t, server.appURL, clientID, challenge, "")
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	html, _ := io.ReadAll(response.Body)
 	assert.Contains(t, string(html), "Already paired")
 	assert.Contains(t, string(html), "error=access_denied")
 }
 
 func TestPairingEnableIndefinitely(t *testing.T) {
-	srv := startServer(t)
-	runCLI(t, srv.dataDir, "pairing", "enable", "--indefinitely")
+	server := startServer(t)
+	runCLI(t, server.dataDir, "pairing", "enable", "--indefinitely")
 
 	// Multiple distinct clients can now pair.
-	assert.True(t, pairs(t, srv.appURL))
-	assert.True(t, pairs(t, srv.appURL))
+	assert.True(t, pairs(t, server.appURL))
+	assert.True(t, pairs(t, server.appURL))
 }
 
 func TestPairingDisable(t *testing.T) {
-	srv := startServer(t)
+	server := startServer(t)
 
 	// Pair one client while in the default "once" mode.
-	clientID := register(t, srv.appURL)
+	clientID := register(t, server.appURL)
 	verifier, challenge := pkcePair(t)
-	code := authorizeCode(t, srv.appURL, clientID, challenge)
-	exchangeCode(t, srv.appURL, clientID, code, verifier)
+	code := authorizeCode(t, server.appURL, clientID, challenge)
+	exchangeCode(t, server.appURL, clientID, code, verifier)
 
-	runCLI(t, srv.dataDir, "pairing", "disable")
+	runCLI(t, server.dataDir, "pairing", "disable")
 
 	// A new client is blocked...
-	assert.False(t, pairs(t, srv.appURL))
+	assert.False(t, pairs(t, server.appURL))
 
 	// ...but the already-paired client is still admitted (re-authorize).
 	_, challenge2 := pkcePair(t)
-	resp := authorize(t, srv.appURL, clientID, challenge2, "")
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusFound, resp.StatusCode)
+	response := authorize(t, server.appURL, clientID, challenge2, "")
+	defer response.Body.Close()
+	require.Equal(t, http.StatusFound, response.StatusCode)
 }

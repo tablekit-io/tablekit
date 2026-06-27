@@ -5,8 +5,8 @@
 package services
 
 import (
-	"core/config"
-	"core/store"
+	"core/services/config"
+	"core/services/store"
 )
 
 // Services holds the shared services every layer needs.

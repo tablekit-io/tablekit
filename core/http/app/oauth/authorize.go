@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"core/store"
+	"core/services/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,14 +27,14 @@ func (h *Handlers) handleAuthorize(c *gin.Context) {
 	h.authorizeMu.Lock()
 	defer h.authorizeMu.Unlock()
 
-	q := c.Request.URL.Query()
-	responseType := q.Get("response_type")
-	clientID := q.Get("client_id")
-	redirectURI := q.Get("redirect_uri")
-	state := q.Get("state")
-	codeChallenge := q.Get("code_challenge")
-	challengeMethod := q.Get("code_challenge_method")
-	scope := q.Get("scope")
+	query := c.Request.URL.Query()
+	responseType := query.Get("response_type")
+	clientID := query.Get("client_id")
+	redirectURI := query.Get("redirect_uri")
+	state := query.Get("state")
+	codeChallenge := query.Get("code_challenge")
+	challengeMethod := query.Get("code_challenge_method")
+	scope := query.Get("scope")
 
 	if responseType != "code" {
 		authorizeError(c, "response_type must be \"code\"")
@@ -104,12 +104,12 @@ func (h *Handlers) handleAuthorize(c *gin.Context) {
 		authorizeError(c, "malformed redirect_uri")
 		return
 	}
-	rq := target.Query()
-	rq.Set("code", code)
+	redirectQuery := target.Query()
+	redirectQuery.Set("code", code)
 	if state != "" {
-		rq.Set("state", state)
+		redirectQuery.Set("state", state)
 	}
-	target.RawQuery = rq.Encode()
+	target.RawQuery = redirectQuery.Encode()
 	c.Redirect(http.StatusFound, target.String())
 }
 
@@ -137,16 +137,16 @@ func renderAlreadyPaired(c *gin.Context, redirectURI, state string) {
 		c.String(http.StatusOK, "already paired")
 		return
 	}
-	q := target.Query()
-	q.Set("error", "access_denied")
-	q.Set("error_description", "this server is already paired with another client")
+	query := target.Query()
+	query.Set("error", "access_denied")
+	query.Set("error_description", "this server is already paired with another client")
 	if state != "" {
-		q.Set("state", state)
+		query.Set("state", state)
 	}
-	target.RawQuery = q.Encode()
+	target.RawQuery = query.Encode()
 
 	c.Status(http.StatusOK)
-	if err := alreadyPairedTmpl.Execute(c.Writer, struct {
+	if err := alreadyPairedTemplate.Execute(c.Writer, struct {
 		Delay       int
 		RedirectURL string
 	}{

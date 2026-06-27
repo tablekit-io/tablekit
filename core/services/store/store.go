@@ -85,18 +85,18 @@ type tokensFile struct {
 
 // Store is the persistence handle. Construct with New.
 type Store struct {
-	dir string
-	mu  sync.Mutex
+	directory string
+	mu        sync.Mutex
 }
 
 // New ensures DataDir exists and returns a Store. Existing state files are
 // loaded once up front so schema violations fail fast at startup rather than on
 // the first request that touches them.
-func New(dir string) (*Store, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+func New(directory string) (*Store, error) {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir}
+	s := &Store{directory: directory}
 	if _, err := s.loadClients(); err != nil {
 		return nil, fmt.Errorf("loading clients.json: %w", err)
 	}
@@ -111,7 +111,7 @@ func New(dir string) (*Store, error) {
 
 // ---- low-level file helpers (callers hold s.mu) -------------------------
 
-func (s *Store) path(name string) string { return filepath.Join(s.dir, name) }
+func (s *Store) path(name string) string { return filepath.Join(s.directory, name) }
 
 // readJSON loads name into v. A missing file is not an error: v keeps its
 // zero/initialized value so callers can start from empty state.
@@ -138,50 +138,50 @@ func (s *Store) writeJSON(name string, v any) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.path(name) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	tempPath := s.path(name) + ".tmp"
+	if err := os.WriteFile(tempPath, b, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path(name))
+	return os.Rename(tempPath, s.path(name))
 }
 
 func (s *Store) loadClients() (*clientsFile, error) {
-	cf := &clientsFile{Clients: map[string]*Client{}}
-	if err := s.readJSON("clients.json", cf); err != nil {
+	clientsData := &clientsFile{Clients: map[string]*Client{}}
+	if err := s.readJSON("clients.json", clientsData); err != nil {
 		return nil, err
 	}
-	if cf.Clients == nil {
-		cf.Clients = map[string]*Client{}
+	if clientsData.Clients == nil {
+		clientsData.Clients = map[string]*Client{}
 	}
-	if cf.PairedClientIDs == nil {
+	if clientsData.PairedClientIDs == nil {
 		// Keep it a non-nil slice so it marshals to [] not null (schema: array).
-		cf.PairedClientIDs = []string{}
+		clientsData.PairedClientIDs = []string{}
 	}
-	if cf.PairingMode == "" {
-		cf.PairingMode = PairingOnce
+	if clientsData.PairingMode == "" {
+		clientsData.PairingMode = PairingOnce
 	}
 	// Fold the legacy single paired client into the list.
-	if cf.LegacyPairedClientID != "" {
-		if !slices.Contains(cf.PairedClientIDs, cf.LegacyPairedClientID) {
-			cf.PairedClientIDs = append(cf.PairedClientIDs, cf.LegacyPairedClientID)
+	if clientsData.LegacyPairedClientID != "" {
+		if !slices.Contains(clientsData.PairedClientIDs, clientsData.LegacyPairedClientID) {
+			clientsData.PairedClientIDs = append(clientsData.PairedClientIDs, clientsData.LegacyPairedClientID)
 		}
-		cf.LegacyPairedClientID = ""
+		clientsData.LegacyPairedClientID = ""
 	}
-	return cf, nil
+	return clientsData, nil
 }
 
 func (s *Store) loadTokens() (*tokensFile, error) {
-	tf := &tokensFile{Codes: map[string]*AuthCode{}, Chains: map[string]*Chain{}}
-	if err := s.readJSON("tokens.json", tf); err != nil {
+	tokensData := &tokensFile{Codes: map[string]*AuthCode{}, Chains: map[string]*Chain{}}
+	if err := s.readJSON("tokens.json", tokensData); err != nil {
 		return nil, err
 	}
-	if tf.Codes == nil {
-		tf.Codes = map[string]*AuthCode{}
+	if tokensData.Codes == nil {
+		tokensData.Codes = map[string]*AuthCode{}
 	}
-	if tf.Chains == nil {
-		tf.Chains = map[string]*Chain{}
+	if tokensData.Chains == nil {
+		tokensData.Chains = map[string]*Chain{}
 	}
-	return tf, nil
+	return tokensData, nil
 }
 
 // ---- signing key --------------------------------------------------------
@@ -283,23 +283,23 @@ func (s *Store) SigningKey() ([]byte, error) {
 func (s *Store) SaveClient(c *Client) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cf, err := s.loadClients()
+	clientsData, err := s.loadClients()
 	if err != nil {
 		return err
 	}
-	cf.Clients[c.ClientID] = c
-	return s.writeJSON("clients.json", cf)
+	clientsData.Clients[c.ClientID] = c
+	return s.writeJSON("clients.json", clientsData)
 }
 
 // GetClient returns the client by id, or nil if unknown.
 func (s *Store) GetClient(id string) (*Client, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cf, err := s.loadClients()
+	clientsData, err := s.loadClients()
 	if err != nil {
 		return nil, err
 	}
-	return cf.Clients[id], nil
+	return clientsData.Clients[id], nil
 }
 
 // TryPair reports whether clientID may use the server, pairing it if the
@@ -311,23 +311,23 @@ func (s *Store) GetClient(id string) (*Client, error) {
 func (s *Store) TryPair(clientID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cf, err := s.loadClients()
+	clientsData, err := s.loadClients()
 	if err != nil {
 		return false, err
 	}
-	if slices.Contains(cf.PairedClientIDs, clientID) {
+	if slices.Contains(clientsData.PairedClientIDs, clientID) {
 		return true, nil
 	}
-	switch cf.PairingMode {
+	switch clientsData.PairingMode {
 	case PairingIndefinite:
-		cf.PairedClientIDs = append(cf.PairedClientIDs, clientID)
+		clientsData.PairedClientIDs = append(clientsData.PairedClientIDs, clientID)
 	case PairingOnce:
-		cf.PairedClientIDs = append(cf.PairedClientIDs, clientID)
-		cf.PairingMode = PairingDisabled
+		clientsData.PairedClientIDs = append(clientsData.PairedClientIDs, clientID)
+		clientsData.PairingMode = PairingDisabled
 	default: // disabled or unknown
 		return false, nil
 	}
-	if err := s.writeJSON("clients.json", cf); err != nil {
+	if err := s.writeJSON("clients.json", clientsData); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -342,23 +342,23 @@ func (s *Store) SetPairingMode(mode string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cf, err := s.loadClients()
+	clientsData, err := s.loadClients()
 	if err != nil {
 		return err
 	}
-	cf.PairingMode = mode
-	return s.writeJSON("clients.json", cf)
+	clientsData.PairingMode = mode
+	return s.writeJSON("clients.json", clientsData)
 }
 
 // PairingStatus returns the current mode and the paired client ids.
 func (s *Store) PairingStatus() (mode string, paired []string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cf, err := s.loadClients()
+	clientsData, err := s.loadClients()
 	if err != nil {
 		return "", nil, err
 	}
-	return cf.PairingMode, cf.PairedClientIDs, nil
+	return clientsData.PairingMode, clientsData.PairedClientIDs, nil
 }
 
 // ---- auth codes ---------------------------------------------------------
@@ -367,12 +367,12 @@ func (s *Store) PairingStatus() (mode string, paired []string, err error) {
 func (s *Store) PutCode(c *AuthCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return err
 	}
-	tf.Codes[c.Code] = c
-	return s.writeJSON("tokens.json", tf)
+	tokensData.Codes[c.Code] = c
+	return s.writeJSON("tokens.json", tokensData)
 }
 
 // ConsumeCode atomically fetches and deletes a code (single use). Returns nil
@@ -380,16 +380,16 @@ func (s *Store) PutCode(c *AuthCode) error {
 func (s *Store) ConsumeCode(code string) (*AuthCode, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return nil, err
 	}
-	c := tf.Codes[code]
+	c := tokensData.Codes[code]
 	if c == nil {
 		return nil, nil
 	}
-	delete(tf.Codes, code)
-	if err := s.writeJSON("tokens.json", tf); err != nil {
+	delete(tokensData.Codes, code)
+	if err := s.writeJSON("tokens.json", tokensData); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -401,49 +401,49 @@ func (s *Store) ConsumeCode(code string) (*AuthCode, error) {
 func (s *Store) NewChain(c *Chain) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return err
 	}
-	tf.Chains[c.ID] = c
-	return s.writeJSON("tokens.json", tf)
+	tokensData.Chains[c.ID] = c
+	return s.writeJSON("tokens.json", tokensData)
 }
 
 // GetChain returns the chain by id, or nil if unknown.
 func (s *Store) GetChain(id string) (*Chain, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return nil, err
 	}
-	return tf.Chains[id], nil
+	return tokensData.Chains[id], nil
 }
 
 // BumpCutoff advances a chain's InvalidatedBefore to t (rotation).
 func (s *Store) BumpCutoff(id string, t time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return err
 	}
-	if ch := tf.Chains[id]; ch != nil {
-		ch.InvalidatedBefore = t
+	if chain := tokensData.Chains[id]; chain != nil {
+		chain.InvalidatedBefore = t
 	}
-	return s.writeJSON("tokens.json", tf)
+	return s.writeJSON("tokens.json", tokensData)
 }
 
 // RevokeChain marks a chain revoked (replay detected / logout).
 func (s *Store) RevokeChain(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tf, err := s.loadTokens()
+	tokensData, err := s.loadTokens()
 	if err != nil {
 		return err
 	}
-	if ch := tf.Chains[id]; ch != nil {
-		ch.Revoked = true
+	if chain := tokensData.Chains[id]; chain != nil {
+		chain.Revoked = true
 	}
-	return s.writeJSON("tokens.json", tf)
+	return s.writeJSON("tokens.json", tokensData)
 }

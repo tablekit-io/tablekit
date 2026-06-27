@@ -23,41 +23,49 @@ func connect(t *testing.T, appURL string, client *http.Client) (*mcp.ClientSessi
 }
 
 func TestMCPListAndCallTool(t *testing.T) {
-	srv := startServer(t)
-	_, tokens := fullHandshake(t, srv.appURL)
+	server := startServer(t)
+	_, tokens := fullHandshake(t, server.appURL)
 	token := tokens["access_token"].(string)
 
-	cs, err := connect(t, srv.appURL, bearerClient(token))
+	clientSession, err := connect(t, server.appURL, bearerClient(token))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
+	t.Cleanup(func() { _ = clientSession.Close() })
 
 	ctx := context.Background()
 
-	list, err := cs.ListTools(ctx, &mcp.ListToolsParams{})
+	list, err := clientSession.ListTools(ctx, &mcp.ListToolsParams{})
 	require.NoError(t, err)
-	require.Len(t, list.Tools, 1)
-	tool := list.Tools[0]
+	// ListTools is the protocol-level listing: it returns every registered tool
+	// (hello_world plus the interactive widget and its app-only data loader).
+	// App-only visibility is a host-side filter, not a protocol one, so look the
+	// tool up by name rather than asserting it's the only one.
+	byName := make(map[string]*mcp.Tool, len(list.Tools))
+	for _, listed := range list.Tools {
+		byName[listed.Name] = listed
+	}
+	tool := byName["hello_world"]
+	require.NotNil(t, tool)
 	assert.Equal(t, "hello_world", tool.Name)
 	assert.NotNil(t, tool.OutputSchema)
 	require.NotNil(t, tool.Annotations)
 	assert.True(t, tool.Annotations.ReadOnlyHint)
 
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "hello_world",
 		Arguments: map[string]any{"name": "omran"},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Content, 1)
-	text, ok := res.Content[0].(*mcp.TextContent)
+	require.Len(t, result.Content, 1)
+	text, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Equal(t, "Hello, omran!", text.Text)
-	structured := res.StructuredContent.(map[string]any)
+	structured := result.StructuredContent.(map[string]any)
 	assert.Equal(t, "Hello, omran!", structured["greeting"])
 }
 
 func TestMCPUnauthenticatedRejected(t *testing.T) {
-	srv := startServer(t)
+	server := startServer(t)
 	// No bearer token → the MCP handshake must fail.
-	_, err := connect(t, srv.appURL, http.DefaultClient)
+	_, err := connect(t, server.appURL, http.DefaultClient)
 	assert.Error(t, err)
 }

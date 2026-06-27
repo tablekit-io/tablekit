@@ -17,40 +17,40 @@ import (
 // newStore returns a Store backed by a fresh temp dir.
 func newStore(t *testing.T) *Store {
 	t.Helper()
-	st, err := New(t.TempDir())
+	storageService, err := New(t.TempDir())
 	require.NoError(t, err)
-	return st
+	return storageService
 }
 
 func TestSigningKeyGeneratesBase64(t *testing.T) {
-	st := newStore(t)
+	storageService := newStore(t)
 
-	k1, err := st.SigningKey()
+	key1, err := storageService.SigningKey()
 	require.NoError(t, err)
-	assert.Len(t, k1, 32)
+	assert.Len(t, key1, 32)
 
 	// The file is base64 text that decodes back to the key, not a binary blob.
-	raw, err := os.ReadFile(filepath.Join(st.dir, "signing.key"))
+	raw, err := os.ReadFile(filepath.Join(storageService.directory, "signing.key"))
 	require.NoError(t, err)
 	decoded, err := base64.StdEncoding.DecodeString(string(raw))
 	require.NoError(t, err)
-	assert.Equal(t, k1, decoded)
+	assert.Equal(t, key1, decoded)
 
 	// Stable across calls and across a fresh Store over the same dir.
-	k2, err := st.SigningKey()
+	key2, err := storageService.SigningKey()
 	require.NoError(t, err)
-	assert.Equal(t, k1, k2)
+	assert.Equal(t, key1, key2)
 
-	reopened, err := New(st.dir)
+	reopened, err := New(storageService.directory)
 	require.NoError(t, err)
-	k3, err := reopened.SigningKey()
+	key3, err := reopened.SigningKey()
 	require.NoError(t, err)
-	assert.Equal(t, k1, k3)
+	assert.Equal(t, key1, key3)
 }
 
 func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "signing.key")
+	directory := t.TempDir()
+	keyPath := filepath.Join(directory, "signing.key")
 
 	// Pre-base64 format: exactly 32 raw bytes.
 	legacy := make([]byte, 32)
@@ -60,7 +60,7 @@ func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
 	require.NoError(t, os.WriteFile(keyPath, legacy, 0o600))
 
 	// New() migrates the file in place at boot.
-	st, err := New(dir)
+	storageService, err := New(directory)
 	require.NoError(t, err)
 
 	raw, err := os.ReadFile(keyPath)
@@ -69,14 +69,14 @@ func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, legacy, decoded, "file rewritten as base64 of the legacy key")
 
-	key, err := st.SigningKey()
+	key, err := storageService.SigningKey()
 	require.NoError(t, err)
 	assert.Equal(t, legacy, key, "same key bytes preserved across migration")
 
 	// Re-opening is idempotent.
-	st2, err := New(dir)
+	storageService2, err := New(directory)
 	require.NoError(t, err)
-	key2, err := st2.SigningKey()
+	key2, err := storageService2.SigningKey()
 	require.NoError(t, err)
 	assert.Equal(t, legacy, key2)
 }
@@ -121,16 +121,16 @@ func TestDecodeSigningKey(t *testing.T) {
 }
 
 func TestClients(t *testing.T) {
-	st := newStore(t)
+	storageService := newStore(t)
 
-	got, err := st.GetClient("nope")
+	got, err := storageService.GetClient("nope")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 
 	c := &Client{ClientID: "abc", RedirectURIs: []string{"http://x/cb"}, CreatedAt: time.Now()}
-	require.NoError(t, st.SaveClient(c))
+	require.NoError(t, storageService.SaveClient(c))
 
-	got, err = st.GetClient("abc")
+	got, err = storageService.GetClient("abc")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, []string{"http://x/cb"}, got.RedirectURIs)
@@ -138,162 +138,162 @@ func TestClients(t *testing.T) {
 
 func TestPairingModes(t *testing.T) {
 	t.Run("once admits one then locks", func(t *testing.T) {
-		st := newStore(t)
+		storageService := newStore(t)
 		// Fresh state defaults to "once".
-		mode, paired, err := st.PairingStatus()
+		mode, paired, err := storageService.PairingStatus()
 		require.NoError(t, err)
 		assert.Equal(t, PairingOnce, mode)
 		assert.Empty(t, paired)
 
-		ok, err := st.TryPair("client-a")
+		ok, err := storageService.TryPair("client-a")
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		// Same client is idempotently allowed.
-		ok, err = st.TryPair("client-a")
+		ok, err = storageService.TryPair("client-a")
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		// A different client is rejected; mode is now disabled.
-		ok, err = st.TryPair("client-b")
+		ok, err = storageService.TryPair("client-b")
 		require.NoError(t, err)
 		assert.False(t, ok)
 
-		mode, paired, err = st.PairingStatus()
+		mode, paired, err = storageService.PairingStatus()
 		require.NoError(t, err)
 		assert.Equal(t, PairingDisabled, mode)
 		assert.Equal(t, []string{"client-a"}, paired)
 	})
 
 	t.Run("indefinite admits many", func(t *testing.T) {
-		st := newStore(t)
-		require.NoError(t, st.SetPairingMode(PairingIndefinite))
+		storageService := newStore(t)
+		require.NoError(t, storageService.SetPairingMode(PairingIndefinite))
 		for _, id := range []string{"a", "b", "c"} {
-			ok, err := st.TryPair(id)
+			ok, err := storageService.TryPair(id)
 			require.NoError(t, err)
 			assert.True(t, ok)
 		}
-		mode, paired, err := st.PairingStatus()
+		mode, paired, err := storageService.PairingStatus()
 		require.NoError(t, err)
 		assert.Equal(t, PairingIndefinite, mode)
 		assert.ElementsMatch(t, []string{"a", "b", "c"}, paired)
 	})
 
 	t.Run("disabled rejects new but allows paired", func(t *testing.T) {
-		st := newStore(t)
-		require.NoError(t, st.SetPairingMode(PairingIndefinite))
-		_, err := st.TryPair("known")
+		storageService := newStore(t)
+		require.NoError(t, storageService.SetPairingMode(PairingIndefinite))
+		_, err := storageService.TryPair("known")
 		require.NoError(t, err)
 
-		require.NoError(t, st.SetPairingMode(PairingDisabled))
-		ok, err := st.TryPair("stranger")
+		require.NoError(t, storageService.SetPairingMode(PairingDisabled))
+		ok, err := storageService.TryPair("stranger")
 		require.NoError(t, err)
 		assert.False(t, ok)
 
-		ok, err = st.TryPair("known")
+		ok, err = storageService.TryPair("known")
 		require.NoError(t, err)
 		assert.True(t, ok)
 	})
 
 	t.Run("unknown mode rejected", func(t *testing.T) {
-		st := newStore(t)
-		assert.Error(t, st.SetPairingMode("bogus"))
+		storageService := newStore(t)
+		assert.Error(t, storageService.SetPairingMode("bogus"))
 	})
 }
 
 func TestLegacyPairedClientIDMigration(t *testing.T) {
-	dir := t.TempDir()
+	directory := t.TempDir()
 	// Hand-write a pre-multi-client clients.json.
 	legacy := `{"paired_client_id":"old-client","clients":{}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "clients.json"), []byte(legacy), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "clients.json"), []byte(legacy), 0o600))
 
-	st, err := New(dir)
+	storageService, err := New(directory)
 	require.NoError(t, err)
 
-	mode, paired, err := st.PairingStatus()
+	mode, paired, err := storageService.PairingStatus()
 	require.NoError(t, err)
 	assert.Equal(t, PairingOnce, mode) // default applied
 	assert.Equal(t, []string{"old-client"}, paired)
 
 	// A resave drops the legacy key in favor of the list.
-	require.NoError(t, st.SetPairingMode(PairingDisabled))
-	raw, err := os.ReadFile(filepath.Join(dir, "clients.json"))
+	require.NoError(t, storageService.SetPairingMode(PairingDisabled))
+	raw, err := os.ReadFile(filepath.Join(directory, "clients.json"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "paired_client_id\"")
 	assert.Contains(t, string(raw), "paired_client_ids")
 }
 
 func TestEmptyPairedListMarshalsToArray(t *testing.T) {
-	dir := t.TempDir()
-	st, err := New(dir)
+	directory := t.TempDir()
+	storageService, err := New(directory)
 	require.NoError(t, err)
 
 	// SaveClient writes clients.json with an empty (but non-nil) paired list.
-	require.NoError(t, st.SaveClient(&Client{
+	require.NoError(t, storageService.SaveClient(&Client{
 		ClientID: "x", RedirectURIs: []string{"http://x/cb"}, CreatedAt: time.Now(),
 	}))
 
-	raw, err := os.ReadFile(filepath.Join(dir, "clients.json"))
+	raw, err := os.ReadFile(filepath.Join(directory, "clients.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), `"paired_client_ids": []`)
 
 	// Reopening validates against the schema; [] (not null) must pass.
-	_, err = New(dir)
+	_, err = New(directory)
 	require.NoError(t, err)
 }
 
 func TestAuthCodeSingleUse(t *testing.T) {
-	st := newStore(t)
+	storageService := newStore(t)
 	code := &AuthCode{
 		Code: "c1", ClientID: "a", RedirectURI: "http://x/cb",
 		CodeChallenge: "chal", Scope: "mcp", UserID: "owner",
 		ExpiresAt: time.Now().Add(time.Minute),
 	}
-	require.NoError(t, st.PutCode(code))
+	require.NoError(t, storageService.PutCode(code))
 
-	got, err := st.ConsumeCode("c1")
+	got, err := storageService.ConsumeCode("c1")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, "chal", got.CodeChallenge)
 
 	// Second consume returns nil — codes are one-time.
-	got, err = st.ConsumeCode("c1")
+	got, err = storageService.ConsumeCode("c1")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestChains(t *testing.T) {
-	st := newStore(t)
-	ch := &Chain{
+	storageService := newStore(t)
+	chain := &Chain{
 		ID: "ch1", ClientID: "a", UserID: "owner", Scope: "mcp",
 		RedirectURI: "http://x/cb", InvalidatedBefore: time.Unix(0, 0), CreatedAt: time.Now(),
 	}
-	require.NoError(t, st.NewChain(ch))
+	require.NoError(t, storageService.NewChain(chain))
 
-	got, err := st.GetChain("ch1")
+	got, err := storageService.GetChain("ch1")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.False(t, got.Revoked)
 
 	cutoff := time.Now().Truncate(time.Second)
-	require.NoError(t, st.BumpCutoff("ch1", cutoff))
-	got, err = st.GetChain("ch1")
+	require.NoError(t, storageService.BumpCutoff("ch1", cutoff))
+	got, err = storageService.GetChain("ch1")
 	require.NoError(t, err)
 	assert.True(t, got.InvalidatedBefore.Equal(cutoff))
 
-	require.NoError(t, st.RevokeChain("ch1"))
-	got, err = st.GetChain("ch1")
+	require.NoError(t, storageService.RevokeChain("ch1"))
+	got, err = storageService.GetChain("ch1")
 	require.NoError(t, err)
 	assert.True(t, got.Revoked)
 }
 
 func TestNewFailsOnCorruptState(t *testing.T) {
-	dir := t.TempDir()
+	directory := t.TempDir()
 	// Client object missing the required client_id field.
 	bad := `{"clients":{"x":{"redirect_uris":["http://x/cb"],"created_at":"2026-01-01T00:00:00Z"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "clients.json"), []byte(bad), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "clients.json"), []byte(bad), 0o600))
 
-	_, err := New(dir)
+	_, err := New(directory)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "schema validation failed")
 }
@@ -302,7 +302,7 @@ func TestNewFailsOnCorruptState(t *testing.T) {
 // goroutines racing to pair distinct clients must yield exactly one winner.
 // Run with `go test -race`.
 func TestTryPairConcurrent(t *testing.T) {
-	st := newStore(t) // defaults to once
+	storageService := newStore(t) // defaults to once
 
 	const n = 32
 	var wins int32
@@ -311,7 +311,7 @@ func TestTryPairConcurrent(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			ok, err := st.TryPair(clientIDFor(i))
+			ok, err := storageService.TryPair(clientIDFor(i))
 			if err == nil && ok {
 				atomic.AddInt32(&wins, 1)
 			}
@@ -320,7 +320,7 @@ func TestTryPairConcurrent(t *testing.T) {
 	wg.Wait()
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&wins))
-	mode, paired, err := st.PairingStatus()
+	mode, paired, err := storageService.PairingStatus()
 	require.NoError(t, err)
 	assert.Equal(t, PairingDisabled, mode)
 	assert.Len(t, paired, 1)

@@ -1,10 +1,10 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 
 	"core/services"
-	"core/store"
+	"core/services/store"
 
 	"github.com/spf13/cobra"
 )

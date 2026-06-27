@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"core/config"
 	"core/services"
-	"core/store"
+	"core/services/config"
+	"core/services/store"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -37,8 +37,8 @@ type Claims struct {
 
 // Issuer builds and validates the server's JWTs against the shared HS256 key.
 type Issuer struct {
-	cfg *config.Config
-	key []byte
+	configService *config.Config
+	key           []byte
 }
 
 func init() {
@@ -62,7 +62,7 @@ func NewIssuer(appServices *services.Services) (*Issuer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Issuer{cfg: configService, key: key}, nil
+	return &Issuer{configService: configService, key: key}, nil
 }
 
 type issueArgs struct {
@@ -78,7 +78,7 @@ func (i *Issuer) sign(a issueArgs, aud string, ttl time.Duration) (token string,
 		Chain: a.chainID,
 		Scope: a.scope,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    i.cfg.PublicBaseURL,
+			Issuer:    i.configService.PublicBaseURL,
 			Subject:   subject,
 			Audience:  jwt.ClaimStrings{aud},
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -92,14 +92,14 @@ func (i *Issuer) sign(a issueArgs, aud string, ttl time.Duration) (token string,
 
 // IssueAccess mints a short-lived access token.
 func (i *Issuer) IssueAccess(clientID, chainID, scope string) (string, error) {
-	t, _, err := i.sign(issueArgs{clientID, chainID, scope}, audienceAccess, i.cfg.AccessTTL)
+	t, _, err := i.sign(issueArgs{clientID, chainID, scope}, audienceAccess, i.configService.AccessTTL)
 	return t, err
 }
 
 // IssueRefresh mints a refresh token and returns its iat (needed for the chain
 // rotation cutoff).
 func (i *Issuer) IssueRefresh(clientID, chainID, scope string) (token string, iat time.Time, err error) {
-	return i.sign(issueArgs{clientID, chainID, scope}, audienceRefresh, i.cfg.RefreshTTL)
+	return i.sign(issueArgs{clientID, chainID, scope}, audienceRefresh, i.configService.RefreshTTL)
 }
 
 func (i *Issuer) verify(token, aud string) (*Claims, error) {
@@ -110,7 +110,7 @@ func (i *Issuer) verify(token, aud string) (*Claims, error) {
 		}
 		return i.key, nil
 	},
-		jwt.WithIssuer(i.cfg.PublicBaseURL),
+		jwt.WithIssuer(i.configService.PublicBaseURL),
 		jwt.WithAudience(aud),
 		jwt.WithValidMethods([]string{"HS256"}),
 	)

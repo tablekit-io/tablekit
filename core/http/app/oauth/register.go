@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"core/store"
+	"core/services/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,20 +20,20 @@ type registerRequest struct {
 // handleRegister implements POST /register (RFC 7591). It accepts any client —
 // the single-client pairing lock is enforced later, at /authorize.
 func (h *Handlers) handleRegister(c *gin.Context) {
-	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request registerRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		sendError(c, http.StatusBadRequest, "invalid_client_metadata", "invalid JSON body")
 		return
 	}
-	if len(req.RedirectURIs) == 0 {
+	if len(request.RedirectURIs) == 0 {
 		sendError(c, http.StatusBadRequest, "invalid_redirect_uri", "redirect_uris is required")
 		return
 	}
 
 	client := &store.Client{
 		ClientID:     uuid.NewString(),
-		ClientName:   req.ClientName,
-		RedirectURIs: req.RedirectURIs,
+		ClientName:   request.ClientName,
+		RedirectURIs: request.RedirectURIs,
 		CreatedAt:    time.Now(),
 	}
 	if err := h.appServices.Store.SaveClient(client); err != nil {

@@ -1,10 +1,10 @@
-package cmd
+package cli
 
 import (
 	"os"
 	"testing"
 
-	"core/store"
+	"core/services/store"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,9 +47,9 @@ func TestPairingDisable(t *testing.T) {
 
 func assertMode(t *testing.T, want string) {
 	t.Helper()
-	st, err := store.New(os.Getenv("DATA_DIR"))
+	storageService, err := store.New(os.Getenv("DATA_DIR"))
 	require.NoError(t, err)
-	mode, _, err := st.PairingStatus()
+	mode, _, err := storageService.PairingStatus()
 	require.NoError(t, err)
 	assert.Equal(t, want, mode)
 }

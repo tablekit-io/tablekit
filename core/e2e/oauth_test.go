@@ -11,8 +11,8 @@ import (
 )
 
 func TestOAuthHappyPath(t *testing.T) {
-	srv := startServer(t)
-	_, tokens := fullHandshake(t, srv.appURL)
+	server := startServer(t)
+	_, tokens := fullHandshake(t, server.appURL)
 
 	assert.NotEmpty(t, tokens["access_token"])
 	assert.NotEmpty(t, tokens["refresh_token"])
@@ -21,12 +21,12 @@ func TestOAuthHappyPath(t *testing.T) {
 }
 
 func TestRefreshRotationAndReplay(t *testing.T) {
-	srv := startServer(t)
-	clientID, tokens := fullHandshake(t, srv.appURL)
+	server := startServer(t)
+	clientID, tokens := fullHandshake(t, server.appURL)
 	oldRefresh := tokens["refresh_token"].(string)
 
 	// Rotation: old refresh yields a new pair.
-	status, body := postForm(t, srv.appURL+"/oauth/token", url.Values{
+	status, body := postForm(t, server.appURL+"/oauth/token", url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {clientID},
 		"refresh_token": {oldRefresh},
@@ -36,7 +36,7 @@ func TestRefreshRotationAndReplay(t *testing.T) {
 	assert.NotEqual(t, oldRefresh, newRefresh)
 
 	// Replay: reusing the old refresh is rejected as theft.
-	status, body = postForm(t, srv.appURL+"/oauth/token", url.Values{
+	status, body = postForm(t, server.appURL+"/oauth/token", url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {clientID},
 		"refresh_token": {oldRefresh},
@@ -45,7 +45,7 @@ func TestRefreshRotationAndReplay(t *testing.T) {
 	assert.Equal(t, "invalid_grant", body["error"])
 
 	// And the whole chain is now revoked: the rotated refresh fails too.
-	status, body = postForm(t, srv.appURL+"/oauth/token", url.Values{
+	status, body = postForm(t, server.appURL+"/oauth/token", url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {clientID},
 		"refresh_token": {newRefresh},
@@ -55,43 +55,43 @@ func TestRefreshRotationAndReplay(t *testing.T) {
 }
 
 func TestMetadataEndpoints(t *testing.T) {
-	srv := startServer(t)
+	server := startServer(t)
 
-	resp, err := http.Get(srv.appURL + "/.well-known/oauth-authorization-server")
+	response, err := http.Get(server.appURL + "/.well-known/oauth-authorization-server")
 	require.NoError(t, err)
-	var as map[string]any
-	require.NoError(t, decode(resp, &as))
-	assert.Equal(t, srv.appURL, as["issuer"])
-	assert.Equal(t, srv.appURL+"/oauth/token", as["token_endpoint"])
+	var authServerMeta map[string]any
+	require.NoError(t, decode(response, &authServerMeta))
+	assert.Equal(t, server.appURL, authServerMeta["issuer"])
+	assert.Equal(t, server.appURL+"/oauth/token", authServerMeta["token_endpoint"])
 
-	resp, err = http.Get(srv.appURL + "/.well-known/oauth-protected-resource")
+	response, err = http.Get(server.appURL + "/.well-known/oauth-protected-resource")
 	require.NoError(t, err)
-	var pr map[string]any
-	require.NoError(t, decode(resp, &pr))
-	assert.Equal(t, srv.appURL, pr["resource"])
+	var protectedResourceMeta map[string]any
+	require.NoError(t, decode(response, &protectedResourceMeta))
+	assert.Equal(t, server.appURL, protectedResourceMeta["resource"])
 }
 
 func TestMCPRequiresBearer(t *testing.T) {
-	srv := startServer(t)
-	resp, err := http.Post(srv.appURL+"/mcp", "application/json", strings.NewReader("{}"))
+	server := startServer(t)
+	response, err := http.Post(server.appURL+"/mcp", "application/json", strings.NewReader("{}"))
 	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, resp.Header.Get("WWW-Authenticate"), "resource_metadata")
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+	assert.Contains(t, response.Header.Get("WWW-Authenticate"), "resource_metadata")
 }
 
 func TestWelcomeRoutes(t *testing.T) {
-	srv := startServer(t)
+	server := startServer(t)
 
-	resp, err := http.Get(srv.appURL + "/")
+	response, err := http.Get(server.appURL + "/")
 	require.NoError(t, err)
 	var app map[string]any
-	require.NoError(t, decode(resp, &app))
+	require.NoError(t, decode(response, &app))
 	assert.Contains(t, app["message"], "MCP server")
 
-	resp, err = http.Get(srv.controlURL + "/health")
+	response, err = http.Get(server.controlURL + "/health")
 	require.NoError(t, err)
 	var health map[string]any
-	require.NoError(t, decode(resp, &health))
+	require.NoError(t, decode(response, &health))
 	assert.Equal(t, "OK", health["status"])
 }

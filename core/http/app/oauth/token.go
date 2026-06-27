@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"core/store"
+	"core/services/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

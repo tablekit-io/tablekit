@@ -2,7 +2,7 @@
 // OAuth bearer-token middleware. It registers the hello_world tool, the
 // hello_world_interactive donut widget (an MCP Apps UI resource) and its
 // app-only hello_world_interactive_data loader.
-package mcpserver
+package mcp
 
 import (
 	"context"
@@ -10,16 +10,16 @@ import (
 	"math/rand"
 	"net/http"
 
-	"core/mcpserver/widgets"
-	"core/oauth"
+	"core/http/app/mcp/widgets"
+	"core/http/app/oauth"
 	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// ptr returns a pointer to v, for the optional *bool annotation hints.
-func ptr[T any](v T) *T { return &v }
+// pointer returns a pointer to v, for the optional *bool annotation hints.
+func pointer[T any](v T) *T { return &v }
 
 // helloInput is the hello_world tool's argument schema. Name is optional.
 type helloInput struct {
@@ -129,8 +129,8 @@ func newServer() *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			IdempotentHint:  true,
-			DestructiveHint: ptr(false),
-			OpenWorldHint:   ptr(false),
+			DestructiveHint: pointer(false),
+			OpenWorldHint:   pointer(false),
 		},
 	}, helloWorld)
 
@@ -162,8 +162,8 @@ func newServer() *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			IdempotentHint:  true,
-			DestructiveHint: ptr(false),
-			OpenWorldHint:   ptr(false),
+			DestructiveHint: pointer(false),
+			OpenWorldHint:   pointer(false),
 		},
 	}
 	if uri := widgets.WidgetURI(helloInteractiveWidget); uri != "" {
@@ -179,8 +179,8 @@ func newServer() *mcp.Server {
 		Description: "Returns random example data for the hello_world_interactive donut. App-only: called by the widget over the MCP Apps bridge, hidden from the agent.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
-			DestructiveHint: ptr(false),
-			OpenWorldHint:   ptr(false),
+			DestructiveHint: pointer(false),
+			OpenWorldHint:   pointer(false),
 		},
 	}
 	dataTool.Meta = mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
