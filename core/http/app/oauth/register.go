@@ -30,9 +30,15 @@ func (h *Handlers) HandleRegister(c *gin.Context) {
 		return
 	}
 
+	// ClientName is a pointer (null when absent); only set it when the client
+	// actually supplied a name.
+	var clientName *string
+	if request.ClientName != "" {
+		clientName = &request.ClientName
+	}
 	client := &store.Client{
 		ClientID:     uuid.NewString(),
-		ClientName:   request.ClientName,
+		ClientName:   clientName,
 		RedirectURIs: request.RedirectURIs,
 		CreatedAt:    time.Now(),
 	}

@@ -246,6 +246,17 @@ func runCLI(t *testing.T, dataDir string, args ...string) {
 	require.NoError(t, err, "cli %v failed: %s", args, out)
 }
 
+// runCLIOutput runs the binary like runCLI but returns its stdout, for commands
+// (e.g. pairing token:generate) whose output the test needs to parse.
+func runCLIOutput(t *testing.T, dataDir string, args ...string) string {
+	t.Helper()
+	cmd := exec.CommandContext(context.Background(), binPath, args...)
+	cmd.Env = append(os.Environ(), "DATA_DIR="+dataDir)
+	out, err := cmd.Output()
+	require.NoError(t, err, "cli %v failed", args)
+	return string(out)
+}
+
 func decode(response *http.Response, v any) error {
 	data, err := io.ReadAll(response.Body)
 	if err != nil {

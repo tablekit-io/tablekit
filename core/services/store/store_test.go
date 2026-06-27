@@ -287,6 +287,63 @@ func TestChains(t *testing.T) {
 	assert.True(t, got.Revoked)
 }
 
+func TestBearerTokens(t *testing.T) {
+	storageService := newStore(t)
+
+	got, err := storageService.GetBearerToken("nope")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	token := &BearerToken{
+		ID: "tok-1", ClientID: "client-1",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().AddDate(0, 6, 0),
+	}
+	require.NoError(t, storageService.PutBearerToken(token))
+
+	// Survives a reopen (and passes schema validation on load).
+	reopened, err := New(storageService.directory)
+	require.NoError(t, err)
+	got, err = reopened.GetBearerToken("tok-1")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "client-1", got.ClientID)
+	assert.False(t, got.Revoked)
+
+	// Revoke flips the flag; revoking an unknown id errors.
+	require.NoError(t, reopened.RevokeBearerToken("tok-1"))
+	got, err = reopened.GetBearerToken("tok-1")
+	require.NoError(t, err)
+	assert.True(t, got.Revoked)
+
+	assert.Error(t, reopened.RevokeBearerToken("ghost"))
+}
+
+func TestBearerClientNullName(t *testing.T) {
+	storageService := newStore(t)
+
+	// A bearer client: nil name, empty redirect URIs, type "bearer".
+	require.NoError(t, storageService.SaveClient(&Client{
+		ClientID: "bearer-1", ClientName: nil, RedirectURIs: []string{},
+		Type: "bearer", CreatedAt: time.Now(),
+	}))
+
+	raw, err := os.ReadFile(filepath.Join(storageService.directory, "clients.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"client_name": null`)
+	assert.Contains(t, string(raw), `"type": "bearer"`)
+	assert.Contains(t, string(raw), `"redirect_uris": []`)
+
+	// Reopening validates the (empty redirect_uris, null name) shape against the schema.
+	reopened, err := New(storageService.directory)
+	require.NoError(t, err)
+	got, err := reopened.GetClient("bearer-1")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Nil(t, got.ClientName)
+	assert.Equal(t, "bearer", got.Type)
+	assert.Empty(t, got.RedirectURIs)
+}
+
 func TestNewFailsOnCorruptState(t *testing.T) {
 	directory := t.TempDir()
 	// Client object missing the required client_id field.

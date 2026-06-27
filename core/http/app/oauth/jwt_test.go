@@ -73,6 +73,57 @@ func TestAudienceSeparation(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestBearerTokenRoundTrip(t *testing.T) {
+	issuer := newIssuer(t, testConfig())
+
+	token, expiresAt, err := issuer.IssueBearer("client-1", "tok-1")
+	require.NoError(t, err)
+
+	// Valid roughly 6 calendar months out.
+	assert.WithinDuration(t, time.Now().AddDate(0, 6, 0), expiresAt, time.Minute)
+
+	claims, err := issuer.VerifyBearer(token)
+	require.NoError(t, err)
+	assert.Equal(t, "client-1", claims.CID)
+	assert.Equal(t, "tok-1", claims.ID)
+	assert.Equal(t, "mcp", claims.Scope)
+	// exp is truncated to the JWT time precision (microsecond), so compare with
+	// a small tolerance rather than exact equality.
+	assert.WithinDuration(t, expiresAt, claims.ExpiresAt.Time, time.Millisecond)
+}
+
+func TestBearerAudienceSeparation(t *testing.T) {
+	issuer := newIssuer(t, testConfig())
+
+	bearer, _, err := issuer.IssueBearer("c", "t")
+	require.NoError(t, err)
+	access, err := issuer.IssueAccess("c", "ch", "mcp")
+	require.NoError(t, err)
+
+	// A bearer token must not pass as an access token (this is what stops a
+	// caller from dropping the prefix to bypass the revocation check), and an
+	// access token must not pass as a bearer token.
+	_, err = issuer.VerifyAccess(bearer)
+	assert.Error(t, err)
+	_, err = issuer.VerifyBearer(access)
+	assert.Error(t, err)
+}
+
+func TestBearerTokenID(t *testing.T) {
+	issuer := newIssuer(t, testConfig())
+
+	token, _, err := issuer.IssueBearer("c", "tok-42")
+	require.NoError(t, err)
+
+	// jti is readable without verification (used by token:revoke).
+	id, err := BearerTokenID(token)
+	require.NoError(t, err)
+	assert.Equal(t, "tok-42", id)
+
+	_, err = BearerTokenID("not.a.jwt")
+	assert.Error(t, err)
+}
+
 func TestExpiredTokenRejected(t *testing.T) {
 	configService := testConfig()
 	configService.AccessTTL = -time.Minute // already expired at issue time

@@ -22,10 +22,10 @@
       "required": ["client_id", "redirect_uris", "created_at"],
       "properties": {
         "client_id": { "type": "string", "minLength": 1 },
-        "client_name": { "type": "string" },
+        "client_name": { "type": ["string", "null"] },
+        "type": { "type": "string" },
         "redirect_uris": {
           "type": "array",
-          "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
         },
         "created_at": { "type": "string", "format": "date-time" }

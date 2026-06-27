@@ -25,12 +25,19 @@ import (
 	"time"
 )
 
-// Client is a registered OAuth client (RFC 7591 dynamic registration).
+// Client is a registered OAuth client (RFC 7591 dynamic registration). A CLI-
+// minted bearer token also registers a Client, with Type "bearer", a nil
+// ClientName (serialized as null) and an empty RedirectURIs.
 type Client struct {
-	ClientID     string    `json:"client_id"`
-	ClientName   string    `json:"client_name,omitempty"`
+	ClientID string `json:"client_id"`
+	// ClientName is a pointer so an absent name serializes as JSON null rather
+	// than being omitted, which is what bearer clients carry.
+	ClientName   *string   `json:"client_name"`
 	RedirectURIs []string  `json:"redirect_uris"`
-	CreatedAt    time.Time `json:"created_at"`
+	// Type distinguishes a CLI bearer client ("bearer") from an OAuth client
+	// (empty/omitted).
+	Type      string    `json:"type,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // AuthCode is a one-time authorization code bound to a PKCE challenge.
@@ -77,10 +84,23 @@ type clientsFile struct {
 	Clients              map[string]*Client `json:"clients"`
 }
 
+// BearerToken is a long-lived, CLI-minted access token. Unlike OAuth access
+// tokens (which are short-lived and never persisted), a bearer token is recorded
+// here so it can be revoked: the MCP guard looks it up by its jti on every
+// request and rejects it once Revoked is set.
+type BearerToken struct {
+	ID        string    `json:"id"` // jti; links the JWT to this row
+	ClientID  string    `json:"client_id"`
+	Revoked   bool      `json:"revoked"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // tokensFile is the on-disk shape of tokens.json.
 type tokensFile struct {
-	Codes  map[string]*AuthCode `json:"codes"`
-	Chains map[string]*Chain    `json:"chains"`
+	Codes  map[string]*AuthCode    `json:"codes"`
+	Chains map[string]*Chain       `json:"chains"`
+	Tokens map[string]*BearerToken `json:"tokens"`
 }
 
 // Store is the persistence handle. Construct with New.
@@ -171,7 +191,11 @@ func (s *Store) loadClients() (*clientsFile, error) {
 }
 
 func (s *Store) loadTokens() (*tokensFile, error) {
-	tokensData := &tokensFile{Codes: map[string]*AuthCode{}, Chains: map[string]*Chain{}}
+	tokensData := &tokensFile{
+		Codes:  map[string]*AuthCode{},
+		Chains: map[string]*Chain{},
+		Tokens: map[string]*BearerToken{},
+	}
 	if err := s.readJSON("tokens.json", tokensData); err != nil {
 		return nil, err
 	}
@@ -180,6 +204,9 @@ func (s *Store) loadTokens() (*tokensFile, error) {
 	}
 	if tokensData.Chains == nil {
 		tokensData.Chains = map[string]*Chain{}
+	}
+	if tokensData.Tokens == nil {
+		tokensData.Tokens = map[string]*BearerToken{}
 	}
 	return tokensData, nil
 }
@@ -445,5 +472,47 @@ func (s *Store) RevokeChain(id string) error {
 	if chain := tokensData.Chains[id]; chain != nil {
 		chain.Revoked = true
 	}
+	return s.writeJSON("tokens.json", tokensData)
+}
+
+// ---- bearer tokens ------------------------------------------------------
+
+// PutBearerToken persists a CLI-minted bearer token.
+func (s *Store) PutBearerToken(t *BearerToken) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tokensData, err := s.loadTokens()
+	if err != nil {
+		return err
+	}
+	tokensData.Tokens[t.ID] = t
+	return s.writeJSON("tokens.json", tokensData)
+}
+
+// GetBearerToken returns the bearer token by id, or nil if unknown.
+func (s *Store) GetBearerToken(id string) (*BearerToken, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tokensData, err := s.loadTokens()
+	if err != nil {
+		return nil, err
+	}
+	return tokensData.Tokens[id], nil
+}
+
+// RevokeBearerToken marks a bearer token revoked. It returns an error if the id
+// is unknown, so the CLI can tell the user nothing was revoked.
+func (s *Store) RevokeBearerToken(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tokensData, err := s.loadTokens()
+	if err != nil {
+		return err
+	}
+	token := tokensData.Tokens[id]
+	if token == nil {
+		return fmt.Errorf("no bearer token with id %q", id)
+	}
+	token.Revoked = true
 	return s.writeJSON("tokens.json", tokensData)
 }
