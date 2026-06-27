@@ -32,15 +32,6 @@ func NewHandlers(appServices *services.Services) (*Handlers, error) {
 // Issuer exposes the JWT issuer so the MCP layer can verify access tokens.
 func (h *Handlers) Issuer() *Issuer { return h.issuer }
 
-// Register mounts every OAuth route on the given Gin engine.
-func (h *Handlers) Register(r *gin.Engine) {
-	r.POST("/register", h.handleRegister)
-	r.GET("/oauth/authorize", h.handleAuthorize)
-	r.POST("/oauth/token", h.handleToken)
-	r.GET("/.well-known/oauth-authorization-server", h.handleAuthServerMetadata)
-	r.GET("/.well-known/oauth-protected-resource", h.handleProtectedResourceMetadata)
-}
-
 // sendError writes an RFC 6749 error response with no-store caching.
 func sendError(c *gin.Context, status int, code, description string) {
 	c.Header("Cache-Control", "no-store")

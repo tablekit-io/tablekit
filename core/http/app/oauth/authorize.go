@@ -15,14 +15,14 @@ import (
 // authCodeTTL bounds how long an issued authorization code stays redeemable.
 const authCodeTTL = 5 * time.Minute
 
-// handleAuthorize implements GET /oauth/authorize.
+// HandleAuthorize implements GET /oauth/authorize.
 //
 // There is no login UI: authorization is auto-approved. Pairing is enforced
 // here via the store's pairing mode (once/indefinite/disabled): an
 // already-paired client is always admitted, a new client is admitted only if
 // the mode allows, otherwise it gets the "already paired" page that bounces
 // back with an OAuth error. See `tablekit pairing` to change the mode.
-func (h *Handlers) handleAuthorize(c *gin.Context) {
+func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	// Hold the lock for the entire handler so pairing decisions cannot race.
 	h.authorizeMu.Lock()
 	defer h.authorizeMu.Unlock()

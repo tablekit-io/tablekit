@@ -5,7 +5,7 @@ package app
 
 import (
 	"core/http/app/oauth"
-	"core/http/control"
+	"core/http/commons"
 	"core/services"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +20,14 @@ func RegisterHandlers(engine *gin.Engine, appServices *services.Services) error 
 		return err
 	}
 
-	engine.GET("/", control.Welcome("hello and welcome to the tablekit MCP server"))
-	oauthHandlers.Register(engine)
+	engine.GET("/", commons.Welcome("hello and welcome to the tablekit MCP server"))
+
+	// OAuth 2.1 (RFC 7591 DCR, authorization-code + PKCE, RFC 8414/9728 metadata).
+	engine.POST("/register", oauthHandlers.HandleRegister)
+	engine.GET("/oauth/authorize", oauthHandlers.HandleAuthorize)
+	engine.POST("/oauth/token", oauthHandlers.HandleToken)
+	engine.GET("/.well-known/oauth-authorization-server", oauthHandlers.HandleAuthServerMetadata)
+	engine.GET("/.well-known/oauth-protected-resource", oauthHandlers.HandleProtectedResourceMetadata)
 
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.

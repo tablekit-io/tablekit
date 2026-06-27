@@ -6,9 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// handleAuthServerMetadata serves RFC 8414 authorization-server metadata so
+// HandleAuthServerMetadata serves RFC 8414 authorization-server metadata so
 // clients can discover the authorize/token/register endpoints.
-func (h *Handlers) handleAuthServerMetadata(c *gin.Context) {
+func (h *Handlers) HandleAuthServerMetadata(c *gin.Context) {
 	base := h.appServices.Config.PublicBaseURL
 	c.JSON(http.StatusOK, gin.H{
 		"issuer":                                base,
@@ -23,10 +23,10 @@ func (h *Handlers) handleAuthServerMetadata(c *gin.Context) {
 	})
 }
 
-// handleProtectedResourceMetadata serves RFC 9728 protected-resource metadata.
+// HandleProtectedResourceMetadata serves RFC 9728 protected-resource metadata.
 // Since the resource and authorization servers share one origin, both point at
 // PublicBaseURL.
-func (h *Handlers) handleProtectedResourceMetadata(c *gin.Context) {
+func (h *Handlers) HandleProtectedResourceMetadata(c *gin.Context) {
 	base := h.appServices.Config.PublicBaseURL
 	c.JSON(http.StatusOK, gin.H{
 		"resource":                 base,

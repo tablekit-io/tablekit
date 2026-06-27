@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// handleToken implements POST /oauth/token for the authorization_code and
+// HandleToken implements POST /oauth/token for the authorization_code and
 // refresh_token grants. Client authentication is "none" (public client +
 // PKCE), so the client is identified by the client_id form field.
-func (h *Handlers) handleToken(c *gin.Context) {
+func (h *Handlers) HandleToken(c *gin.Context) {
 	grantType := c.PostForm("grant_type")
 	clientID := c.PostForm("client_id")
 

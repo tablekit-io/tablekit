@@ -17,9 +17,9 @@ type registerRequest struct {
 	ClientName   string   `json:"client_name"`
 }
 
-// handleRegister implements POST /register (RFC 7591). It accepts any client —
+// HandleRegister implements POST /register (RFC 7591). It accepts any client —
 // the single-client pairing lock is enforced later, at /authorize.
-func (h *Handlers) handleRegister(c *gin.Context) {
+func (h *Handlers) HandleRegister(c *gin.Context) {
 	var request registerRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		sendError(c, http.StatusBadRequest, "invalid_client_metadata", "invalid JSON body")
