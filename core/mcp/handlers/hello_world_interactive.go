@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"core/helpers"
 
 	"core/mcp/ui"
 
@@ -44,8 +45,8 @@ func (h *Handlers) registerHelloWorldInteractive(s *mcp.Server) {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			IdempotentHint:  true,
-			DestructiveHint: pointer(false),
-			OpenWorldHint:   pointer(false),
+			DestructiveHint: helpers.Pointer(false),
+			OpenWorldHint:   helpers.Pointer(false),
 		},
 	}
 	if uri := ui.WidgetURI(helloInteractiveWidget); uri != "" {

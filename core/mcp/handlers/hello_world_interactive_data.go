@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"core/helpers"
 	"fmt"
 	"math/rand"
 
@@ -59,8 +60,8 @@ func (h *Handlers) registerHelloWorldInteractiveData(s *mcp.Server) {
 		Description: "Returns random example data for the hello_world_interactive donut. App-only: called by the widget over the MCP Apps bridge, hidden from the agent.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
-			DestructiveHint: pointer(false),
-			OpenWorldHint:   pointer(false),
+			DestructiveHint: helpers.Pointer(false),
+			OpenWorldHint:   helpers.Pointer(false),
 		},
 	}
 	dataTool.Meta = mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}

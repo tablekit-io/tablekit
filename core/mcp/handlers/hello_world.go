@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"core/helpers"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,8 +43,8 @@ func (h *Handlers) registerHelloWorld(s *mcp.Server) {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			IdempotentHint:  true,
-			DestructiveHint: pointer(false),
-			OpenWorldHint:   pointer(false),
+			DestructiveHint: helpers.Pointer(false),
+			OpenWorldHint:   helpers.Pointer(false),
 		},
 	}, h.helloWorld)
 }

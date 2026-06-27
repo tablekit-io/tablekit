@@ -12,9 +12,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// pointer returns a pointer to v, for the optional *bool annotation hints.
-func pointer[T any](v T) *T { return &v }
-
 // Handlers serves the MCP tools. It carries the shared Services so tools can
 // reach config and the store. Construct with New and wire with Register.
 type Handlers struct {
