@@ -119,9 +119,21 @@ for the CLI, and the official [MCP go-sdk](https://github.com/modelcontextprotoc
 editing any `.go` file under `core/` rebuilds and restarts the server in place.
 
 ```bash
-go test ./...        # unit + e2e suite
+go test ./...        # unit + e2e suite (DB container tests skip without Docker)
 go test -race ./...  # the pairing path is concurrency-sensitive
 ```
+
+The database e2e tests (`run_sql` against real Postgres/MySQL, including over an
+SSH tunnel and TLS) need Docker and the shared `tablekit` network, which exist
+inside the `core` container — so run them through Compose:
+
+```bash
+docker compose up -d core
+docker compose exec core go test ./e2e/...   # full DB + tunnel + TLS matrix
+```
+
+Outside that environment they `t.Skip` themselves, so a plain `go test ./...` on
+your host stays green.
 
 ### Running e2e tests (throw-away database containers)
 
