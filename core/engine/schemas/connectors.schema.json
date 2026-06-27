@@ -32,10 +32,15 @@
     "postgresConnector": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "details"],
+      "required": ["type"],
+      "oneOf": [
+        { "required": ["details"], "description": "Structured connection." },
+        { "required": ["connectionString"], "description": "Connection URI." }
+      ],
       "properties": {
         "type": { "const": "postgres", "description": "Discriminator: PostgreSQL." },
         "details": { "$ref": "#/$defs/postgresDetails" },
+        "connectionString": { "type": "string", "minLength": 1, "pattern": "^postgres(ql)?://", "description": "PostgreSQL connection URI (postgres:// or postgresql://). Mutually exclusive with `details`." },
         "tls": { "$ref": "#/$defs/tls" },
         "ssh": { "$ref": "#/$defs/ssh" }
       }
@@ -43,10 +48,15 @@
     "mysqlConnector": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "details"],
+      "required": ["type"],
+      "oneOf": [
+        { "required": ["details"], "description": "Structured connection." },
+        { "required": ["connectionString"], "description": "Connection URI." }
+      ],
       "properties": {
         "type": { "const": "mysql", "description": "Discriminator: MySQL." },
         "details": { "$ref": "#/$defs/mysqlDetails" },
+        "connectionString": { "type": "string", "minLength": 1, "pattern": "^(mysql|mariadb)://", "description": "MySQL connection URI (mysql://; mariadb:// is cross-accepted — wire-compatible). Mutually exclusive with `details`." },
         "tls": { "$ref": "#/$defs/tls" },
         "ssh": { "$ref": "#/$defs/ssh" }
       }
@@ -54,10 +64,15 @@
     "mariadbConnector": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "details"],
+      "required": ["type"],
+      "oneOf": [
+        { "required": ["details"], "description": "Structured connection." },
+        { "required": ["connectionString"], "description": "Connection URI." }
+      ],
       "properties": {
         "type": { "const": "mariadb", "description": "Discriminator: MariaDB. Wire-compatible with MySQL but kept distinct for flavour-specific behavior." },
         "details": { "$ref": "#/$defs/mariadbDetails" },
+        "connectionString": { "type": "string", "minLength": 1, "pattern": "^(mariadb|mysql)://", "description": "MariaDB connection URI (mariadb://; mysql:// is cross-accepted — wire-compatible). Mutually exclusive with `details`." },
         "tls": { "$ref": "#/$defs/tls" },
         "ssh": { "$ref": "#/$defs/ssh" }
       }
@@ -178,6 +193,10 @@
           "type": "mysql",
           "details": { "host": "10.0.0.5", "username": "reader" },
           "ssh": { "host": "bastion.example.com", "username": "deploy", "sshKeyFilePath": "~/.ssh/id_ed25519" }
+        },
+        "reporting": {
+          "type": "postgres",
+          "connectionString": "postgres://reader@warehouse.internal:5432/reporting"
         }
       }
     }
