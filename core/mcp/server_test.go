@@ -4,34 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"core/http/app/mcp/widgets"
+	"core/mcp/ui"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestHelloWorld(t *testing.T) {
-	tests := []struct {
-		name string
-		in   helloInput
-		want string
-	}{
-		{"with name", helloInput{Name: "omran"}, "Hello, omran!"},
-		{"empty name", helloInput{}, "Hello, world!"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, out, err := helloWorld(context.Background(), nil, tt.in)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, out.Greeting)
-			require.Len(t, result.Content, 1)
-			text, ok := result.Content[0].(*mcp.TextContent)
-			require.True(t, ok)
-			assert.Equal(t, tt.want, text.Text)
-		})
-	}
-}
 
 // connectInMemory wires a client session to newServer() over the SDK's
 // in-memory transport — exercises the MCP protocol with no HTTP or auth.
@@ -107,10 +85,10 @@ func TestInteractiveToolsRegistered(t *testing.T) {
 	// Build-dependent: the model-facing tool links its widget via
 	// _meta.ui.resourceUri only when @tablekit/widgets has been built into the
 	// embed dir. A fresh checkout (placeholder manifest) carries no link.
-	if widgets.WidgetURI("hello_world_interactive") != "" {
-		ui := uiMeta(tools["hello_world_interactive"])
-		require.NotNil(t, ui, "built interactive tool should carry _meta.ui")
-		uri, _ := ui["resourceUri"].(string)
+	if ui.WidgetURI("hello_world_interactive") != "" {
+		meta := uiMeta(tools["hello_world_interactive"])
+		require.NotNil(t, meta, "built interactive tool should carry _meta.ui")
+		uri, _ := meta["resourceUri"].(string)
 		assert.Contains(t, uri, "ui://tablekit/hello_world_interactive-")
 	}
 }
@@ -118,7 +96,7 @@ func TestInteractiveToolsRegistered(t *testing.T) {
 func TestWidgetResourceIsServed(t *testing.T) {
 	// Only meaningful once the widget is built into the embed dir; a fresh
 	// checkout ships the placeholder manifest and serves no UI resources.
-	resources := widgets.Resources()
+	resources := ui.Resources()
 	if len(resources) == 0 {
 		t.Skip("no built widgets in embed dir (run `bun run build` in widgets/)")
 	}
@@ -140,31 +118,6 @@ func TestWidgetResourceIsServed(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, read.Contents, 1)
 	assert.Contains(t, read.Contents[0].Text, "<html", "resource should serve the widget HTML")
-}
-
-func TestInteractiveDataReturnsRandomSlices(t *testing.T) {
-	tests := []struct {
-		name string
-		in   dataInput
-		want int
-	}{
-		{"default", dataInput{}, 5},
-		{"custom", dataInput{Slices: 3}, 3},
-		{"clamped low", dataInput{Slices: 0}, 5},
-		{"clamped high", dataInput{Slices: 99}, 8},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, out, err := helloInteractiveData(context.Background(), nil, tt.in)
-			require.NoError(t, err)
-			require.Len(t, out.Data, tt.want)
-			for _, s := range out.Data {
-				assert.NotEmpty(t, s.Label)
-				assert.GreaterOrEqual(t, s.Value, float64(10))
-				assert.LessOrEqual(t, s.Value, float64(100))
-			}
-		})
-	}
 }
 
 func TestCallToolReturnsStructuredContent(t *testing.T) {

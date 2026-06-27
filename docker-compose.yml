@@ -37,7 +37,7 @@ services:
       start_period: 60s
 
   # Dev-only: builds the @tablekit/widgets MCP Apps templates with bun + vite in
-  # watch mode. Output lands in core/http/app/mcp/widgets/dist (bind-mounted below),
+  # watch mode. Output lands in core/mcp/ui/dist (bind-mounted below),
   # which the core container's Air watcher sees, triggering a Go rebuild that
   # re-embeds the new HTML — so editing a widget hot-reloads the whole stack.
   widgets:
@@ -55,7 +55,7 @@ services:
         target: /widgets
       # vite's dist/ is the core embed dir, so built widgets flow into core.
       - type: bind
-        source: ./core/http/app/mcp/widgets/dist
+        source: ./core/mcp/ui/dist
         target: /widgets/dist
 
 volumes:

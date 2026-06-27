@@ -1,11 +1,11 @@
-// Package widgets serves the compiled MCP Apps UI templates that @tablekit/widgets
+// Package ui serves the compiled MCP Apps UI templates that @tablekit/widgets
 // builds. The vite build emits one content-hashed single-file HTML per template
 // plus a manifest.json mapping template name -> {file, hash, bytes}; that dist
 // tree is bind-mounted into this package directory (see docker-compose) and
 // embedded into the binary here. Because the URI carries the content hash, any
 // widget change yields a new ui://tablekit/<name>-<hash> URI and auto-busts the
 // host's per-URI resource cache.
-package widgets
+package ui
 
 import (
 	"embed"

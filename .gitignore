@@ -10,4 +10,4 @@ widgets/dist/
 # Generated widget builds embedded by core. Keep the placeholder manifest.json
 # (committed so //go:embed dist compiles before the first build); ignore the
 # content-hashed HTML the vite build emits.
-core/http/app/mcp/widgets/dist/*.html
+core/mcp/ui/dist/*.html

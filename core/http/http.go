@@ -5,7 +5,6 @@
 package http
 
 import (
-	"core/http/app/mcp"
 	"core/http/app/oauth"
 	"core/http/control"
 	"core/services"
@@ -35,7 +34,7 @@ func Build(appServices *services.Services) (*App, error) {
 
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.
-	mcpHandler := mcp.Handler(appServices, oauthHandlers.Issuer())
+	mcpHandler := mcpRoute(appServices, oauthHandlers.Issuer())
 	appEngine.Any("/mcp", gin.WrapH(mcpHandler))
 
 	controlEngine := gin.New()

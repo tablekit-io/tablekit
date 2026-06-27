@@ -126,14 +126,17 @@ go test -race ./...  # the pairing path is concurrency-sensitive
 ```
 core/
 ├── cli/                # tablekit CLI — serve, pairing
+├── mcp/                # the MCP server
+│   ├── handlers/       # the tools — one per file
+│   └── ui/             # embedded MCP Apps widget builds (dist)
 ├── services/           # shared dependencies
 │   ├── config/         # environment config
 │   ├── store/          # JSON state (connections, pairing, tokens, signing key)
 │   └── services.go     # the Services bundle (config + store)
 └── http/               # the two Gin listeners
     ├── app/            # public engine
-    │   ├── oauth/      # OAuth 2.1 — register, authorize, token, metadata
-    │   └── mcp/        # the MCP server and its tools
+    │   └── oauth/      # OAuth 2.1 — register, authorize, token, metadata
+    ├── mcp_route.go    # mounts the MCP server on /mcp behind the bearer guard
     └── control/        # control engine — root, health
 ```
 
