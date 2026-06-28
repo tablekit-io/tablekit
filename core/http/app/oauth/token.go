@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"core/services/oauth"
 	"core/services/store"
 
 	"github.com/gin-gonic/gin"
@@ -72,7 +73,7 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "redirect_uri mismatch")
 		return
 	}
-	if !verifyPKCE(codeVerifier, authCode.CodeChallenge) {
+	if !oauth.VerifyPKCE(codeVerifier, authCode.CodeChallenge) {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "PKCE check failed")
 		return
 	}
@@ -104,7 +105,7 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 		return
 	}
 
-	claims, err := h.issuer.VerifyRefresh(refreshToken)
+	claims, err := h.appServices.Issuer.VerifyRefresh(refreshToken)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "invalid refresh token")
 		return
@@ -146,12 +147,12 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 
 // issuePair mints an access+refresh pair and writes the token response.
 func (h *Handlers) issuePair(c *gin.Context, clientID, chainID, scope string) {
-	access, err := h.issuer.IssueAccess(clientID, chainID, scope)
+	access, err := h.appServices.Issuer.IssueAccess(clientID, chainID, scope)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue access token")
 		return
 	}
-	refresh, _, err := h.issuer.IssueRefresh(clientID, chainID, scope)
+	refresh, _, err := h.appServices.Issuer.IssueRefresh(clientID, chainID, scope)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue refresh token")
 		return

@@ -3,6 +3,8 @@ package oauth
 import (
 	"net/http"
 
+	"core/services/oauth"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +21,7 @@ func (h *Handlers) HandleAuthServerMetadata(c *gin.Context) {
 		"response_types_supported":              []string{"code"},
 		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none"},
-		"scopes_supported":                      []string{Scope},
+		"scopes_supported":                      []string{oauth.Scope},
 	})
 }
 
@@ -32,6 +34,6 @@ func (h *Handlers) HandleProtectedResourceMetadata(c *gin.Context) {
 		"resource":                 base,
 		"authorization_servers":    []string{base},
 		"bearer_methods_supported": []string{"header"},
-		"scopes_supported":         []string{Scope},
+		"scopes_supported":         []string{oauth.Scope},
 	})
 }

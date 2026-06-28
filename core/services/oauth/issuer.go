@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"core/services"
 	"core/services/config"
 	"core/services/store"
 
@@ -64,14 +63,13 @@ func init() {
 
 // NewIssuer resolves the signing key: an externally provided base64 key
 // (config.SigningKey) wins, otherwise the store's generated/persisted key is used.
-func NewIssuer(appServices *services.Services) (*Issuer, error) {
-	configService := appServices.Config
+func NewIssuer(configService *config.Config, storageService *store.Store) (*Issuer, error) {
 	var key []byte
 	var err error
 	if configService.SigningKey != "" {
 		key, err = store.DecodeSigningKey(configService.SigningKey)
 	} else {
-		key, err = appServices.Store.SigningKey()
+		key, err = storageService.SigningKey()
 	}
 	if err != nil {
 		return nil, err

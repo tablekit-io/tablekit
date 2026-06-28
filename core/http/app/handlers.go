@@ -12,13 +12,9 @@ import (
 )
 
 // RegisterHandlers mounts the whole app engine — OAuth, MCP, and the welcome
-// root — on engine, wired to the shared services. It errors only if the OAuth
-// layer (persistence / signing key) fails to initialize.
-func RegisterHandlers(engine *gin.Engine, appServices *services.Services) error {
-	oauthHandlers, err := oauth.NewHandlers(appServices)
-	if err != nil {
-		return err
-	}
+// root — on engine, wired to the shared services.
+func RegisterHandlers(engine *gin.Engine, appServices *services.Services) {
+	oauthHandlers := oauth.NewHandlers(appServices)
 
 	engine.GET("/", commons.Welcome("hello and welcome to the tablekit MCP server"))
 
@@ -31,7 +27,5 @@ func RegisterHandlers(engine *gin.Engine, appServices *services.Services) error 
 
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.
-	engine.Any("/mcp", gin.WrapH(MCPRoute(appServices, oauthHandlers.Issuer())))
-
-	return nil
+	engine.Any("/mcp", gin.WrapH(MCPRoute(appServices)))
 }

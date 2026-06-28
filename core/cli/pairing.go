@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"core/http/app/oauth"
 	"core/services"
+	"core/services/oauth"
 	"core/services/store"
 
 	"github.com/google/uuid"
@@ -59,10 +59,6 @@ var pairingTokenGenerateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		issuer, err := oauth.NewIssuer(appServices)
-		if err != nil {
-			return err
-		}
 
 		clientID := uuid.NewString()
 		tokenID := uuid.NewString()
@@ -79,7 +75,7 @@ var pairingTokenGenerateCmd = &cobra.Command{
 			return err
 		}
 
-		token, expiresAt, err := issuer.IssueBearer(clientID, tokenID)
+		token, expiresAt, err := appServices.Issuer.IssueBearer(clientID, tokenID)
 		if err != nil {
 			return err
 		}

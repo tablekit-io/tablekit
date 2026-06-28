@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"core/services/oauth"
 	"core/services/store"
 
 	"github.com/gin-gonic/gin"
@@ -83,7 +84,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	}
 
 	if scope == "" {
-		scope = Scope
+		scope = oauth.Scope
 	}
 	code := uuid.NewString()
 	if err := h.appServices.Store.PutCode(&store.AuthCode{
@@ -92,7 +93,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		RedirectURI:   redirectURI,
 		CodeChallenge: codeChallenge,
 		Scope:         scope,
-		UserID:        UserID,
+		UserID:        oauth.UserID,
 		ExpiresAt:     time.Now().Add(authCodeTTL),
 	}); err != nil {
 		authorizeError(c, "internal error issuing code")

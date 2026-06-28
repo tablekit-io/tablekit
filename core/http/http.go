@@ -20,18 +20,15 @@ type App struct {
 }
 
 // Build constructs the two engines and hands each its registration function and
-// the shared services. It returns an error if the app engine's OAuth layer
-// (persistence or signing key) cannot be initialized.
-func Build(appServices *services.Services) (*App, error) {
+// the shared services.
+func Build(appServices *services.Services) *App {
 	appEngine := gin.New()
 	appEngine.Use(gin.Logger(), gin.Recovery())
-	if err := app.RegisterHandlers(appEngine, appServices); err != nil {
-		return nil, err
-	}
+	app.RegisterHandlers(appEngine, appServices)
 
 	controlEngine := gin.New()
 	controlEngine.Use(gin.Logger(), gin.Recovery())
 	control.RegisterHandlers(controlEngine, appServices)
 
-	return &App{Services: appServices, AppEngine: appEngine, ControlEngine: controlEngine}, nil
+	return &App{Services: appServices, AppEngine: appEngine, ControlEngine: controlEngine}
 }

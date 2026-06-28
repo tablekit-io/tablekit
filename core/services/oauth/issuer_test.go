@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"core/services"
 	"core/services/config"
 	"core/services/store"
 
@@ -19,7 +18,7 @@ func newIssuer(t *testing.T, configService *config.Config) *Issuer {
 	t.Helper()
 	storageService, err := store.New(t.TempDir())
 	require.NoError(t, err)
-	issuer, err := NewIssuer(&services.Services{Config: configService, Store: storageService})
+	issuer, err := NewIssuer(configService, storageService)
 	require.NoError(t, err)
 	return issuer
 }
@@ -193,9 +192,9 @@ func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {
 	// Two issuers, different stores, same external key → cross-verify.
 	storageServiceA, _ := newStore(t)
 	storageServiceB, _ := newStore(t)
-	issuerA, err := NewIssuer(&services.Services{Config: configService, Store: storageServiceA})
+	issuerA, err := NewIssuer(configService, storageServiceA)
 	require.NoError(t, err)
-	issuerB, err := NewIssuer(&services.Services{Config: configService, Store: storageServiceB})
+	issuerB, err := NewIssuer(configService, storageServiceB)
 	require.NoError(t, err)
 
 	token, err := issuerA.IssueAccess("c", "ch", "mcp")
@@ -210,7 +209,7 @@ func TestEnvSigningKeyShortIsPadded(t *testing.T) {
 	configService.SigningKey = base64.StdEncoding.EncodeToString([]byte("short-key"))
 
 	storageService, _ := newStore(t)
-	issuer, err := NewIssuer(&services.Services{Config: configService, Store: storageService})
+	issuer, err := NewIssuer(configService, storageService)
 	require.NoError(t, err)
 
 	token, err := issuer.IssueAccess("c", "ch", "mcp")
@@ -224,7 +223,7 @@ func TestEnvSigningKeyInvalidRejected(t *testing.T) {
 	configService.SigningKey = "!!! not base64 !!!"
 
 	storageService, _ := newStore(t)
-	_, err := NewIssuer(&services.Services{Config: configService, Store: storageService})
+	_, err := NewIssuer(configService, storageService)
 	assert.Error(t, err)
 }
 
@@ -233,7 +232,7 @@ func TestEnvSigningKeyDoesNotWriteFile(t *testing.T) {
 	configService.SigningKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 
 	storageService, directory := newStore(t)
-	_, err := NewIssuer(&services.Services{Config: configService, Store: storageService})
+	_, err := NewIssuer(configService, storageService)
 	require.NoError(t, err)
 
 	// Env key takes precedence; the store's key file is never created.

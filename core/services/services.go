@@ -9,6 +9,7 @@ import (
 
 	"core/engine"
 	"core/services/config"
+	"core/services/oauth"
 	"core/services/store"
 )
 
@@ -17,6 +18,7 @@ type Services struct {
 	Config *config.Config
 	Store  *store.Store
 	Engine *engine.Service
+	Issuer *oauth.Issuer
 }
 
 // New loads config from the environment, opens the on-disk store, and loads the
@@ -35,9 +37,14 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
+	issuer, err := oauth.NewIssuer(configService, storageService)
+	if err != nil {
+		return nil, err
+	}
 	return &Services{
 		Config: configService,
 		Store:  storageService,
 		Engine: engineService,
+		Issuer: issuer,
 	}, nil
 }

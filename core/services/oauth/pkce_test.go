@@ -35,7 +35,7 @@ func TestVerifyPKCE(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, verifyPKCE(tt.verifier, tt.challenge))
+			assert.Equal(t, tt.want, VerifyPKCE(tt.verifier, tt.challenge))
 		})
 	}
 }

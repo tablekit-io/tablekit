@@ -19,6 +19,9 @@ func TestNewWiresConfigAndStore(t *testing.T) {
 
 	require.NotNil(t, appServices.Config)
 	require.NotNil(t, appServices.Store)
+	require.NotNil(t, appServices.Engine)
+	// The JWT issuer is constructed once here and shared across the app.
+	require.NotNil(t, appServices.Issuer)
 	// Config is loaded from the environment we set above...
 	assert.Equal(t, directory, appServices.Config.DataDir)
 	// ...and the store is opened against that same data dir.

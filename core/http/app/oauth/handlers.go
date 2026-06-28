@@ -10,27 +10,20 @@ import (
 )
 
 // Handlers serves the OAuth 2.1 endpoints. Construct with NewHandlers and mount
-// with Register.
+// with Register. The JWT issuer lives on the shared services
+// (appServices.Issuer); these handlers just read it.
 type Handlers struct {
 	appServices *services.Services
-	issuer      *Issuer
 	// authorizeMu serializes the whole /authorize handler so the
 	// read-client → pair → issue-code sequence is atomic and two concurrent
 	// requests can never both win a pairing slot.
 	authorizeMu sync.Mutex
 }
 
-// NewHandlers wires the OAuth layer to its services and JWT issuer.
-func NewHandlers(appServices *services.Services) (*Handlers, error) {
-	issuer, err := NewIssuer(appServices)
-	if err != nil {
-		return nil, err
-	}
-	return &Handlers{appServices: appServices, issuer: issuer}, nil
+// NewHandlers wires the OAuth layer to its services.
+func NewHandlers(appServices *services.Services) *Handlers {
+	return &Handlers{appServices: appServices}
 }
-
-// Issuer exposes the JWT issuer so the MCP layer can verify access tokens.
-func (h *Handlers) Issuer() *Issuer { return h.issuer }
 
 // sendError writes an RFC 6749 error response with no-store caching.
 func sendError(c *gin.Context, status int, code, description string) {
