@@ -3,7 +3,7 @@ import {existsSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join, relative, resolve} from 'node:path';
 import {defineConfig, type Plugin} from 'vite';
-import preact from '@preact/preset-vite';
+import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import {viteSingleFile} from 'vite-plugin-singlefile';
 
@@ -96,17 +96,13 @@ export default defineConfig({
     root: ROOT,
     plugins: [
         tailwindcss(),
-        preact(),
+        react(),
         viteSingleFile(),
         singlefileManifest(ENTRIES),
     ],
     resolve: {
-        // shadcn/Base UI components are authored for React; alias to preact/compat
-        // so they run under Preact (the @ alias points at src for shadcn imports).
+        // @ resolves shadcn's "@/..." imports to src.
         alias: {
-            'react': 'preact/compat',
-            'react-dom': 'preact/compat',
-            'react/jsx-runtime': 'preact/jsx-runtime',
             '@': resolve(ROOT, 'src'),
         },
     },

@@ -1,6 +1,6 @@
 import '../index.css';
-import {render} from 'preact';
-import {useEffect, useMemo, useRef, useState} from 'preact/hooks';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {createRoot} from 'react-dom/client';
 import {
     useApp,
     useDocumentTheme,
@@ -22,8 +22,14 @@ import {
     PointElement,
     Tooltip,
 } from 'chart.js';
-import {Loader2, TriangleAlert} from 'lucide-react';
+import {Download, Loader2, TriangleAlert} from 'lucide-react';
+import {PrismLight as SyntaxHighlighter} from 'react-syntax-highlighter';
+import sqlLang from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
+import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light';
 import {Card} from '@/components/ui/card';
+import {Button} from '@/components/ui/button';
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import {
     buildCartesianConfig,
     buildProportionalConfig,
@@ -52,18 +58,32 @@ Chart.register(
     Legend,
 );
 
+SyntaxHighlighter.registerLanguage('sql', sqlLang);
+
 // The two render tools the host can invoke for this widget. The tool-result's
 // structuredContent.tool discriminates which mapping the tool-input carries.
 type TToolName = 'render_cartesian_series_chart' | 'render_proportional_chart';
 
-// fetch_chart_data's structured result: the rows the chart plots.
-type TChartData = {readonly columns?: string[]; readonly rows?: Row[]};
+// fetch_chart_data's structured result: the rows the chart plots plus the SQL.
+type TChartData = {
+    readonly columns: string[];
+    readonly rows: Row[];
+    readonly sql: string;
+};
 
-// readRows pulls the rows out of a host-proxied CallToolResult, failing soft to
-// [] so a malformed payload renders an empty chart rather than crashing.
-const readRows = (result: {structuredContent?: unknown}): Row[] => {
-    const rows = (result.structuredContent as TChartData | undefined)?.rows;
-    return Array.isArray(rows) ? rows : [];
+// Most rows we put in the DOM for the Table tab. A query can return up to 100k
+// rows; rendering them all would lock the iframe, so we cap and note the rest.
+const TABLE_MAX_ROWS = 500;
+
+// readChartData pulls the structured result of fetch_chart_data, failing soft to
+// empty values so a malformed payload renders empty views rather than crashing.
+const readChartData = (result: {structuredContent?: unknown}): TChartData => {
+    const data = result.structuredContent as Partial<TChartData> | undefined;
+    return {
+        columns: Array.isArray(data?.columns) ? data!.columns : [],
+        rows: Array.isArray(data?.rows) ? data!.rows : [],
+        sql: typeof data?.sql === 'string' ? data!.sql : '',
+    };
 };
 
 // queryKeyOf reads the result_key out of the render tool's forwarded arguments.
@@ -71,6 +91,10 @@ const queryKeyOf = (args: Record<string, unknown> | null): string | null => {
     const key = args?.query_key;
     return typeof key === 'string' ? key : null;
 };
+
+// cellText renders a normalized cell value for the Table tab.
+const cellText = (value: unknown): string =>
+    value == null ? '' : String(value);
 
 const App = () => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -82,8 +106,10 @@ const App = () => {
         null,
     );
     const [tool, setTool] = useState<TToolName | null>(null);
-    const [rows, setRows] = useState<Row[] | null>(null);
+    const [data, setData] = useState<TChartData | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState('chart');
+    const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
 
     // Connect to the host and wire the input/result handlers before the
     // handshake completes (onAppCreated runs pre-connect).
@@ -127,7 +153,7 @@ const App = () => {
         })
             .then((result) => {
                 if (!cancelled) {
-                    setRows(readRows(result));
+                    setData(readChartData(result));
                 }
             })
             .catch((e: unknown) => {
@@ -151,11 +177,15 @@ const App = () => {
         return null;
     }, [tool, toolArgs]);
 
-    // (Re)draw whenever data, mapping or theme changes. Chart.js owns the canvas,
-    // so recreate the instance rather than mutate it in place.
+    // (Re)draw whenever data, mapping, theme or the active tab changes. The
+    // canvas only exists while the Chart tab is shown, so recreate on entry and
+    // destroy on leave (cheap, and avoids hidden-canvas resize quirks).
     useEffect(() => {
+        if (activeTab !== 'chart') {
+            return;
+        }
         const canvas = canvasRef.current;
-        if (!canvas || !rows || !toolArgs || !chartKind) {
+        if (!canvas || !data || !toolArgs || !chartKind) {
             return;
         }
         chartRef.current?.destroy();
@@ -163,40 +193,159 @@ const App = () => {
             chartKind === 'cartesian'
                 ? buildCartesianConfig(
                       toolArgs as unknown as CartesianInput,
-                      rows,
+                      data.rows,
                       theme,
                   )
                 : buildProportionalConfig(
                       toolArgs as unknown as ProportionalInput,
-                      rows,
+                      data.rows,
                       theme,
                   );
         chartRef.current = new Chart(canvas, config);
         return () => chartRef.current?.destroy();
-    }, [rows, toolArgs, chartKind, theme]);
+    }, [data, toolArgs, chartKind, theme, activeTab]);
+
+    // The host opens links in the user's real browser; only offer export when it
+    // advertises that capability.
+    const canExport = isConnected && !!app?.getHostCapabilities()?.openLinks;
+
+    const exportAs = async (format: 'csv' | 'json') => {
+        if (!app || !queryKey) {
+            return;
+        }
+        setExporting(format);
+        try {
+            const result = await app.callServerTool({
+                name: 'get_export_url',
+                arguments: {query_key: queryKey, format},
+            });
+            const url = (result.structuredContent as {url?: string} | undefined)
+                ?.url;
+            if (url) {
+                await app.openLink({url});
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setExporting(null);
+        }
+    };
+
+    if (error) {
+        return (
+            <Card className="m-2 flex items-center gap-2 p-4 text-sm text-destructive">
+                <TriangleAlert size={16} />
+                {error}
+            </Card>
+        );
+    }
+
+    if (!data) {
+        return (
+            <Card className="m-2 flex h-64 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                <Loader2 size={16} className="animate-spin" />
+                Loading chart data…
+            </Card>
+        );
+    }
+
+    const hiddenRows = Math.max(0, data.rows.length - TABLE_MAX_ROWS);
 
     return (
         <Card className="m-2 p-4">
-            {error ? (
-                <div className="flex items-center gap-2 text-sm text-destructive">
-                    <TriangleAlert size={16} />
-                    {error}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <div className="mb-3 flex items-center justify-between gap-4">
+                    <TabsList>
+                        <TabsTrigger value="chart">Chart</TabsTrigger>
+                        <TabsTrigger value="table">Table</TabsTrigger>
+                        <TabsTrigger value="sql">SQL</TabsTrigger>
+                    </TabsList>
+                    {canExport && (
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={exporting !== null}
+                                onClick={() => void exportAs('csv')}>
+                                <Download size={14} />
+                                CSV
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={exporting !== null}
+                                onClick={() => void exportAs('json')}>
+                                <Download size={14} />
+                                JSON
+                            </Button>
+                        </div>
+                    )}
                 </div>
-            ) : !rows ? (
-                <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 size={16} className="animate-spin" />
-                    Loading chart data…
-                </div>
-            ) : (
-                <div className="relative h-72">
-                    <canvas ref={canvasRef} />
-                </div>
-            )}
+
+                <TabsContent value="chart">
+                    <div className="relative h-72">
+                        <canvas ref={canvasRef} />
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="table">
+                    <div className="max-h-72 overflow-auto rounded-md border border-border">
+                        <table className="w-full text-left text-sm">
+                            <thead className="sticky top-0 bg-muted">
+                                <tr>
+                                    {data.columns.map((column) => (
+                                        <th
+                                            key={column}
+                                            className="px-3 py-1.5 font-medium">
+                                            {column}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.rows
+                                    .slice(0, TABLE_MAX_ROWS)
+                                    .map((row, i) => (
+                                        <tr
+                                            key={i}
+                                            className="border-t border-border">
+                                            {data.columns.map((column) => (
+                                                <td
+                                                    key={column}
+                                                    className="px-3 py-1.5">
+                                                    {cellText(row[column])}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {hiddenRows > 0 && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            Showing first {TABLE_MAX_ROWS} of {data.rows.length}{' '}
+                            rows. Use the export buttons for the full result.
+                        </p>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="sql">
+                    <div className="max-h-72 overflow-auto rounded-md border border-border text-sm">
+                        <SyntaxHighlighter
+                            language="sql"
+                            style={theme === 'dark' ? oneDark : oneLight}
+                            customStyle={{margin: 0, background: 'transparent'}}
+                            wrapLongLines>
+                            {data.sql || '-- no SQL available'}
+                        </SyntaxHighlighter>
+                    </div>
+                </TabsContent>
+            </Tabs>
         </Card>
     );
 };
 
 const root = document.getElementById('root');
 if (root) {
-    render(<App />, root);
+    createRoot(root).render(<App />);
 }
