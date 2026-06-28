@@ -17,7 +17,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
-import {Download, Loader2, TriangleAlert} from 'lucide-react';
+import {ChevronDown, Download, Loader2, TriangleAlert} from 'lucide-react';
 import {PrismLight as SyntaxHighlighter} from 'react-syntax-highlighter';
 import sqlLang from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
@@ -25,6 +25,12 @@ import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light';
 import {Card} from '@/components/ui/card';
 import {Button} from '@/components/ui/button';
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     ChartContainer,
     ChartLegend,
@@ -350,24 +356,30 @@ const App = () => {
                         <TabsTrigger value="sql">SQL</TabsTrigger>
                     </TabsList>
                     {canExport && (
-                        <div className="flex gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={exporting !== null}
-                                onClick={() => void exportAs('csv')}>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                render={
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={exporting !== null}
+                                    />
+                                }>
                                 <Download size={14} />
-                                CSV
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={exporting !== null}
-                                onClick={() => void exportAs('json')}>
-                                <Download size={14} />
-                                JSON
-                            </Button>
-                        </div>
+                                Download
+                                <ChevronDown size={14} />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={() => void exportAs('csv')}>
+                                    CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => void exportAs('json')}>
+                                    JSON
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     )}
                 </div>
 
