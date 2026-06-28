@@ -13,8 +13,9 @@ queries return.
 
 - Reads your schema so the assistant knows your tables, columns and relationships.
 - Turns questions into read-only SQL — `SELECT`s only, no writes, no DDL.
-- Renders results as interactive charts right inside the chat, using MCP Apps
-  (you can sort, hover, and switch chart types without leaving the conversation).
+- Renders results as interactive charts right inside the chat, using MCP Apps —
+  switch between Chart, Table and SQL views, hover for details, and export the
+  full result to CSV or JSON without leaving the conversation.
 - Holds several named database connections at once, so you can keep `analytics`
   and `billing` side by side and tell the assistant which one to use.
 - Works with ChatGPT on the web and Claude on web and desktop.
@@ -97,7 +98,7 @@ Everything is set through the environment.
 | `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
 | `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
 | `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |
-| `DATA_DIR`        | `./data`                   | Where pairing + token state is kept.            |
+| `DATA_DIR`        | `./data`                   | TableKit's own state: OAuth/pairing JSON, the signing key, and the SQLite DB (`tablekit.db`) of stored queries. |
 | `SIGNING_KEY`     | generated                  | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
 | `ACCESS_TTL`      | `15m`                      | Access token lifetime.                          |
 | `REFRESH_TTL`     | `168h`                     | Refresh token lifetime.                         |
@@ -152,12 +153,22 @@ themselves dynamically and use PKCE, so there are no secrets to manage by hand.
 Access is gated by pairing rather than a user database, which suits a server
 that's yours alone. State — registered clients and pairing, refresh-token chains
 and CLI bearer tokens, plus the signing key — lives as JSON files under
-`DATA_DIR`, generated on first boot and gitignored.
+`DATA_DIR`, alongside a SQLite database for stored queries; both are generated on
+first boot and gitignored. The SQLite schema is brought up to date automatically
+on every start (embedded goose migrations).
 
 Each query runs on its own connection, reaching the database directly or through
 a per-database SSH tunnel and/or TLS when configured. Read-only is enforced where
 it counts: every query runs inside a read-only transaction, so TableKit won't run
 writes or DDL on your behalf.
+
+TableKit stores queries, not result rows. `run_query` runs read-only SQL, saves
+the query (database, SQL, a description) to its SQLite DB, and returns a
+`result_key`. Everything downstream takes that key and re-runs the stored SQL
+against live data: `retrieve_results` pages through rows, `render_cartesian_series_chart`
+and `render_proportional_chart` draw the in-chat MCP Apps charts (fed by an
+app-only `fetch_chart_data`), and `get_export_url` mints a short-lived signed URL
+the chart widget opens in your browser to download the full result as CSV or JSON.
 
 ## Pairing
 
@@ -258,27 +269,35 @@ mapping in `docker-compose.yml` makes that name resolve on Linux too).
 ```
 core/
 ├── cli/                # tablekit CLI — serve, pairing (incl. bearer tokens)
+├── db/                 # SQLite store (modernc, pure Go) + embedded goose migrations
 ├── engine/             # read-only SQL engine — consumers only touch Service
 │   ├── config/         # databases.yaml loading, validation, secret resolution
 │   ├── driver/         # per-engine impls — postgres, mysql (also mariadb)
 │   ├── transport/      # connection mechanics — sshtunnel, dbtls
 │   └── encoding/       # row normalization + result shaping
-├── mcp/                # the MCP server (wired to the engine)
+├── mcp/                # the MCP server (wired to the services)
 │   ├── handlers/       # the tools — one per file
 │   └── ui/             # embedded MCP Apps widget builds (widgets/)
 ├── services/           # shared dependencies bundle
 │   ├── config/         # environment config
 │   ├── store/          # JSON state (clients, pairing, tokens, signing key)
-│   ├── oauth/          # OAuth 2.1 issuer — JWT, PKCE, bearer minting
-│   └── services.go     # the Services bundle (config + store + engine + issuer)
+│   ├── queries/        # stored-query repository (mcp_queries) over SQLite
+│   ├── oauth/          # OAuth 2.1 issuer — JWT, PKCE, bearer + export tokens
+│   └── services.go     # the Services bundle (config, store, engine, issuer, db, queries)
 └── http/               # the two Gin listeners
     ├── app/            # public engine
     │   ├── oauth/      # OAuth 2.1 handlers — register, authorize, token, metadata
     │   │   └── templates/  # embedded HTML (already-paired page)
+    │   ├── exports/    # signed CSV/JSON export endpoint (/exports/:format/:token)
     │   └── mcp.go      # mounts the MCP server on /mcp behind the bearer guard
     ├── commons/        # shared HTTP bits — the welcome page
     └── control/        # control engine — root, health
 ```
+
+The in-chat charts live in `widgets/` — a separate React + Vite workspace
+(shadcn/ui on Base UI + Tailwind, Recharts, the `@modelcontextprotocol/ext-apps`
+guest SDK) built into single-file HTML and embedded into the binary. In dev the
+`widgets` Compose service rebuilds them on change, which Air picks up to re-embed.
 
 ## Roadmap
 
