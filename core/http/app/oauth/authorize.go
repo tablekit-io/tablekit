@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"core/http/app/oauth/templates"
 	"core/services/oauth"
 	"core/services/store"
 
@@ -147,7 +148,7 @@ func renderAlreadyPaired(c *gin.Context, redirectURI, state string) {
 	target.RawQuery = query.Encode()
 
 	c.Status(http.StatusOK)
-	if err := alreadyPairedTemplate.Execute(c.Writer, struct {
+	if err := templates.AlreadyPairedTemplate.Execute(c.Writer, struct {
 		Delay       int
 		RedirectURL string
 	}{
