@@ -347,13 +347,26 @@ const App = () => {
     };
 
     const copySql = async () => {
+        const text = data?.sql ?? '';
+        // The sandboxed host iframe often blocks navigator.clipboard, so fall back
+        // to a hidden <textarea> + execCommand('copy') under the click gesture.
         try {
-            await navigator.clipboard.writeText(data?.sql ?? '');
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
+            await navigator.clipboard.writeText(text);
         } catch {
-            // The host iframe may block clipboard access; nothing to do.
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+            } finally {
+                document.body.removeChild(textarea);
+            }
         }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
     };
 
     if (error) {
