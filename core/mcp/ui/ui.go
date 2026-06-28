@@ -1,10 +1,10 @@
 // Package ui serves the compiled MCP Apps UI templates that @tablekit/widgets
 // builds. The vite build emits one content-hashed single-file HTML per template
-// plus a manifest.json mapping template name -> {file, hash, bytes}; that dist
-// tree is bind-mounted into this package directory (see docker-compose) and
-// embedded into the binary here. Because the URI carries the content hash, any
-// widget change yields a new ui://tablekit/<name>-<hash> URI and auto-busts the
-// host's per-URI resource cache.
+// plus a manifest.json mapping template name -> {file, hash, bytes}; that
+// widgets tree is bind-mounted into this package directory (see docker-compose)
+// and embedded into the binary here. Because the URI carries the content hash,
+// any widget change yields a new ui://tablekit/<name>-<hash> URI and auto-busts
+// the host's per-URI resource cache.
 package ui
 
 import (
@@ -14,10 +14,10 @@ import (
 
 // The build output lives next to this file. A placeholder manifest.json ({})
 // is committed so this compiles before the first widget build; real builds (and
-// the docker-compose watcher) overwrite the dist tree.
+// the docker-compose watcher) overwrite the widgets tree.
 //
-//go:embed dist
-var dist embed.FS
+//go:embed widgets
+var widgets embed.FS
 
 // MIMEType is the MCP Apps content type: a self-contained HTML document the host
 // renders in a sandboxed iframe.
@@ -39,12 +39,12 @@ type UIResource struct {
 	HTML     string
 }
 
-// readManifest parses dist/manifest.json from the embedded FS. Fail-soft: a tree
-// without a (valid) manifest yields an empty map rather than an error, so a
+// readManifest parses widgets/manifest.json from the embedded FS. Fail-soft: a
+// tree without a (valid) manifest yields an empty map rather than an error, so a
 // binary built before the first widget build still boots — it simply advertises
 // no widgets until rebuilt.
 func readManifest() map[string]manifestEntry {
-	raw, err := dist.ReadFile("dist/manifest.json")
+	raw, err := widgets.ReadFile("widgets/manifest.json")
 	if err != nil {
 		return map[string]manifestEntry{}
 	}
@@ -72,7 +72,7 @@ func Resources() []UIResource {
 	manifest := readManifest()
 	resources := make([]UIResource, 0, len(manifest))
 	for name, entry := range manifest {
-		html, err := dist.ReadFile("dist/" + entry.File)
+		html, err := widgets.ReadFile("widgets/" + entry.File)
 		if err != nil {
 			continue
 		}
