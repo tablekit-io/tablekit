@@ -102,7 +102,7 @@ func runTLSSimpleQuery(t *testing.T, configPath string) {
 // TestTLSPostgres: run_sql reaches a TLS-only postgres with verify-full.
 func TestTLSPostgres(t *testing.T) {
 	requireDocker(t)
-	ensureImage(t, "tablekit-e2e-pgtls:latest", filepath.Join(e2eDir(t), "pgtls"))
+	ensureImage(t, "tablekit-e2e-pgtls:latest", filepath.Join(e2eDir(t), "containers", "pgtls"))
 
 	name := uniqueName("pgtls")
 	caPEM, certPEM, keyPEM := genServerCert(t, name)
@@ -131,7 +131,7 @@ func TestTLSPostgres(t *testing.T) {
 // TestTLSMySQL: run_sql reaches a TLS-required mysql with verify-full.
 func TestTLSMySQL(t *testing.T) {
 	requireDocker(t)
-	ensureImage(t, "tablekit-e2e-mysqltls:latest", filepath.Join(e2eDir(t), "mysqltls"))
+	ensureImage(t, "tablekit-e2e-mysqltls:latest", filepath.Join(e2eDir(t), "containers", "mysqltls"))
 
 	name := uniqueName("mytls")
 	caPEM, certPEM, keyPEM := genServerCert(t, name)

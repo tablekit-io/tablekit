@@ -67,7 +67,7 @@ func generateSSHKey(t *testing.T) (authorizedKey string, privatePEM []byte) {
 // startBastion builds (once) and starts the SSH bastion with the given public key.
 func startBastion(t *testing.T, authorizedKey string) string {
 	t.Helper()
-	ensureImage(t, "tablekit-e2e-bastion:latest", filepath.Join(e2eDir(t), "bastion"))
+	ensureImage(t, "tablekit-e2e-bastion:latest", filepath.Join(e2eDir(t), "containers", "bastion"))
 	name := runContainer(t, containerSpec{
 		name:  uniqueName("bastion"),
 		image: "tablekit-e2e-bastion:latest",
