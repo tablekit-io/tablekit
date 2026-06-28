@@ -88,6 +88,15 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
+  // The stylesheet below is injected via dangerouslySetInnerHTML, so a config
+  // key or color carrying CSS metacharacters (or `</style>`) would break out and
+  // allow injection. Config keys/colors can come from untrusted data (DB column
+  // names/values), so only emit entries whose key is a plain identifier and whose
+  // color is made of safe CSS color characters; anything else is dropped (the
+  // chart elements still carry their own fill/stroke, so visuals are unaffected).
+  const SAFE_KEY = /^[A-Za-z0-9_-]+$/
+  const SAFE_COLOR = /^[A-Za-z0-9#%.,()/\s-]+$/
+
   return (
     <style
       dangerouslySetInnerHTML={{
@@ -100,7 +109,11 @@ ${colorConfig
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ??
       itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
+    return typeof color === "string" &&
+      SAFE_KEY.test(key) &&
+      SAFE_COLOR.test(color)
+      ? `  --color-${key}: ${color};`
+      : null
   })
   .join("\n")}
 }

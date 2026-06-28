@@ -41,9 +41,17 @@ const num = (value: unknown): number => {
 };
 
 // colorAt picks a slice/series color: the shadcn default palette cycled over
-// --chart-1..5, or an explicit hue when the render tool supplied one.
-const colorAt = (index: number, hue?: number): string =>
-    hue == null ? `var(--chart-${(index % 5) + 1})` : `hsl(${hue} 65% 50%)`;
+// --chart-1..5, or an explicit hue when the render tool supplied a valid one.
+// The hue is coerced to a finite 0–359 number so a malformed value can never
+// produce a color string that breaks out of the generated <style> (see the
+// SAFE_COLOR guard in components/ui/chart.tsx).
+const colorAt = (index: number, hue?: number): string => {
+    const h = Number(hue);
+    if (Number.isFinite(h)) {
+        return `hsl(${((h % 360) + 360) % 360} 65% 50%)`;
+    }
+    return `var(--chart-${(index % 5) + 1})`;
+};
 
 // CartesianSeries describes one Y series for the ComposedChart.
 export type CartesianSeries = {
