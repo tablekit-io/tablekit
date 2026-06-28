@@ -1,17 +1,14 @@
-// Pure chart.js config builders for the chart_renderer widget. Kept free of DOM,
-// the bridge and Preact so the mapping logic (rows + tool arguments -> a
-// ChartConfiguration) is easy to read and unit-testable. The widget shell in
-// main.tsx owns the canvas, the bridge handshake and the data fetch.
-import {type ChartConfiguration, type ChartType} from 'chart.js';
+// Pure, framework-agnostic builders that shape fetch_chart_data rows + the render
+// tool's mapping into Recharts-ready models. Kept free of JSX/DOM so the mapping
+// logic is easy to read; the Chart tab in main.tsx renders these with shadcn's
+// chart components. Colors use the default shadcn chart tokens (--chart-1..5),
+// theme-aware for free; an explicit color_hue overrides.
+import {type ChartConfig} from '@/components/ui/chart';
 
 // Row is one result row keyed by column name, as fetch_chart_data returns it.
 export type Row = Record<string, unknown>;
 
-// TTheme mirrors the host theme so chart text/grid colors read on both surfaces.
-export type TTheme = 'light' | 'dark';
-
-// CartesianInput is render_cartesian_series_chart's arguments (the axis/series
-// mapping the host forwards as tool-input).
+// CartesianInput is render_cartesian_series_chart's arguments.
 export type CartesianInput = {
     readonly query_key: string;
     readonly flip_axes?: boolean;
@@ -37,114 +34,101 @@ export type ProportionalInput = {
 };
 
 // num coerces a normalized cell value to a number; non-numeric/blank cells count
-// as 0 so a stray null doesn't blow up the whole series.
+// as 0 so a stray null doesn't break a series.
 const num = (value: unknown): number => {
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) ? n : 0;
 };
 
-// hsl renders an HSL color, optionally with alpha (modern slash syntax, which
-// canvas accepts).
-const hsl = (hue: number, sat: number, light: number, alpha = 1): string =>
-    alpha >= 1
-        ? `hsl(${hue} ${sat}% ${light}%)`
-        : `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
+// colorAt picks a slice/series color: the shadcn default palette cycled over
+// --chart-1..5, or an explicit hue when the render tool supplied one.
+const colorAt = (index: number, hue?: number): string =>
+    hue == null ? `var(--chart-${(index % 5) + 1})` : `hsl(${hue} 65% 50%)`;
 
-// colorFor picks a series/slice color. An explicit hue (render arg) wins;
-// otherwise hues are spread by the golden angle so adjacent series stay
-// distinct, with saturation/lightness tuned per theme.
-const colorFor = (
-    index: number,
-    theme: TTheme,
-    hue?: number,
-    alpha = 1,
-): string => {
-    const h = hue ?? (index * 137.508) % 360;
-    const sat = theme === 'dark' ? 65 : 62;
-    const light = theme === 'dark' ? 60 : 48;
-    return hsl(h, sat, light, alpha);
+// CartesianSeries describes one Y series for the ComposedChart.
+export type CartesianSeries = {
+    readonly key: string;
+    readonly label: string;
+    readonly kind: 'bar' | 'line' | 'area';
+    readonly type: 'monotone' | 'linear';
+    readonly stackId?: string;
+    readonly color: string;
 };
 
-// themeColors are the axis text and grid-line colors for a theme.
-const themeColors = (theme: TTheme) => ({
-    text: theme === 'dark' ? '#e5e7eb' : '#374151',
-    grid: theme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
-});
+export type CartesianModel = {
+    readonly data: Row[];
+    readonly series: CartesianSeries[];
+    readonly config: ChartConfig;
+    readonly xKey: string;
+    readonly xLabel: string;
+    readonly flip: boolean;
+};
 
-// buildCartesianConfig maps rows + a cartesian mapping to a chart.js config. Each
-// Y series becomes a dataset; bars and lines/areas can mix in one chart, series
-// sharing a stack_group stack together, and flip_axes draws horizontally.
-export function buildCartesianConfig(
+// toCartesianModel builds the data + series + ChartConfig a ComposedChart needs.
+// Y columns are coerced to numbers; display_as -> kind, shape -> curve/linear,
+// stack_group -> stackId.
+export function toCartesianModel(
     input: CartesianInput,
     rows: readonly Row[],
-    theme: TTheme,
-): ChartConfiguration {
-    const colors = themeColors(theme);
-    const labels = rows.map((row) => String(row[input.x.prop] ?? ''));
-    const anyStack = input.y.some((series) => !!series.stack_group);
-
-    const datasets = input.y.map((series, i) => {
-        const isArea = series.display_as === 'area';
-        const isLine = series.display_as === 'line' || isArea;
-        const color = colorFor(i, theme, series.color_hue);
-        return {
-            type: (isLine ? 'line' : 'bar') as ChartType,
-            label: series.axes_label || series.prop,
-            data: rows.map((row) => num(row[series.prop])),
-            backgroundColor: isArea
-                ? colorFor(i, theme, series.color_hue, 0.25)
-                : color,
-            borderColor: color,
-            borderWidth: isLine ? 2 : 0,
-            fill: isArea,
-            tension: series.shape === 'curve' ? 0.4 : 0,
-            pointRadius: isLine ? 2 : 0,
-            stack: series.stack_group || undefined,
-        };
+): CartesianModel {
+    const yKeys = input.y.map((s) => s.prop);
+    const data = rows.map((row) => {
+        const copy: Row = {...row};
+        for (const key of yKeys) {
+            copy[key] = num(row[key]);
+        }
+        return copy;
     });
 
-    const valueScale = {
-        ticks: {color: colors.text},
-        grid: {color: colors.grid},
-        stacked: anyStack,
-    };
-    const categoryScale = {
-        title: {
-            display: !!input.x.axes_label,
-            text: input.x.axes_label,
-            color: colors.text,
-        },
-        ticks: {color: colors.text},
-        grid: {color: colors.grid},
-        stacked: anyStack,
-    };
+    const series: CartesianSeries[] = input.y.map((s, i) => ({
+        key: s.prop,
+        label: s.axes_label || s.prop,
+        kind:
+            s.display_as === 'line'
+                ? 'line'
+                : s.display_as === 'area'
+                  ? 'area'
+                  : 'bar',
+        type: s.shape === 'curve' ? 'monotone' : 'linear',
+        stackId: s.stack_group || undefined,
+        color: colorAt(i, s.color_hue),
+    }));
+
+    const config: ChartConfig = Object.fromEntries(
+        series.map((s) => [s.key, {label: s.label, color: s.color}]),
+    );
 
     return {
-        type: 'bar',
-        data: {labels, datasets},
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: input.flip_axes ? 'y' : 'x',
-            scales: input.flip_axes
-                ? {x: valueScale, y: categoryScale}
-                : {x: categoryScale, y: valueScale},
-            plugins: {legend: {labels: {color: colors.text}}},
-        },
+        data,
+        series,
+        config,
+        xKey: input.x.prop,
+        xLabel: input.x.axes_label,
+        flip: !!input.flip_axes,
     };
 }
 
-// buildProportionalConfig maps rows + a proportional mapping to a pie/donut
-// config. Each layer groups rows by its column and sums value_prop, becoming one
-// dataset; multiple layers render as concentric rings (innermost first).
-export function buildProportionalConfig(
+// ProportionalSlice is one slice of one ring.
+export type ProportionalSlice = {
+    readonly name: string;
+    readonly value: number;
+    readonly color: string;
+};
+
+export type ProportionalModel = {
+    readonly layers: ReadonlyArray<{readonly data: ProportionalSlice[]}>;
+    readonly donut: boolean;
+    readonly config: ChartConfig;
+    readonly format: (value: number) => string;
+};
+
+// toProportionalModel groups rows per layer (innermost first) by its column,
+// summing value_prop, and builds a config + value formatter (prefix/suffix).
+export function toProportionalModel(
     input: ProportionalInput,
     rows: readonly Row[],
-    theme: TTheme,
-): ChartConfiguration {
-    const colors = themeColors(theme);
-
-    const datasets = input.layers.map((layer) => {
+): ProportionalModel {
+    const layers = input.layers.map((layer) => {
         const groups = new Map<string, number>();
         for (const row of rows) {
             const key = String(row[layer.discriminator_prop] ?? '');
@@ -152,39 +136,23 @@ export function buildProportionalConfig(
         }
         const keys = [...groups.keys()];
         return {
-            label: layer.discriminator_prop,
-            data: keys.map((key) => groups.get(key) ?? 0),
-            backgroundColor: keys.map((_, i) => colorFor(i, theme)),
-            borderWidth: 1,
-            // Each ring has its own slice keys; stash them so the tooltip can
-            // name the right slice per dataset (the labels array only covers the
-            // innermost ring's legend).
-            keys,
+            data: keys.map((name, i) => ({
+                name,
+                value: groups.get(name) ?? 0,
+                color: colorAt(i),
+            })),
         };
     });
 
-    const fmt = (value: number): string =>
+    const config: ChartConfig = {};
+    for (const layer of layers) {
+        for (const slice of layer.data) {
+            config[slice.name] = {label: slice.name, color: slice.color};
+        }
+    }
+
+    const format = (value: number): string =>
         `${input.value_prefix ?? ''}${value}${input.value_suffix ?? ''}`;
 
-    return {
-        type: input.display === 'pie' ? 'pie' : 'doughnut',
-        data: {labels: datasets[0]?.keys ?? [], datasets},
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {position: 'right', labels: {color: colors.text}},
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => {
-                            const ds = ctx.dataset as {keys?: string[]};
-                            const key =
-                                ds.keys?.[ctx.dataIndex] ?? String(ctx.label);
-                            return `${key}: ${fmt(num(ctx.parsed))}`;
-                        },
-                    },
-                },
-            },
-        },
-    };
+    return {layers, donut: input.display !== 'pie', config, format};
 }

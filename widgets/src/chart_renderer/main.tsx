@@ -1,5 +1,5 @@
 import '../index.css';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {
     useApp,
@@ -7,21 +7,16 @@ import {
     useHostStyleVariables,
 } from '@modelcontextprotocol/ext-apps/react';
 import {
-    ArcElement,
-    BarController,
-    BarElement,
-    CategoryScale,
-    Chart,
-    DoughnutController,
-    Filler,
-    Legend,
-    LinearScale,
-    LineController,
-    LineElement,
-    PieController,
-    PointElement,
-    Tooltip,
-} from 'chart.js';
+    Area,
+    Bar,
+    CartesianGrid,
+    ComposedChart,
+    Line,
+    Pie,
+    PieChart,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import {Download, Loader2, TriangleAlert} from 'lucide-react';
 import {PrismLight as SyntaxHighlighter} from 'react-syntax-highlighter';
 import sqlLang from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
@@ -31,32 +26,19 @@ import {Card} from '@/components/ui/card';
 import {Button} from '@/components/ui/button';
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import {
-    buildCartesianConfig,
-    buildProportionalConfig,
+    ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
+    ChartTooltip,
+    ChartTooltipContent,
+} from '@/components/ui/chart';
+import {
+    toCartesianModel,
+    toProportionalModel,
     type CartesianInput,
     type ProportionalInput,
     type Row,
-    type TTheme,
 } from './charts';
-
-// Register only the controllers/elements the two chart families use; tree-shaking
-// drops the rest. Filler backs area series; the scales/elements cover bar + line;
-// Arc covers pie + doughnut.
-Chart.register(
-    BarController,
-    BarElement,
-    LineController,
-    LineElement,
-    PointElement,
-    PieController,
-    DoughnutController,
-    ArcElement,
-    CategoryScale,
-    LinearScale,
-    Filler,
-    Tooltip,
-    Legend,
-);
 
 SyntaxHighlighter.registerLanguage('sql', sqlLang);
 
@@ -96,10 +78,145 @@ const queryKeyOf = (args: Record<string, unknown> | null): string | null => {
 const cellText = (value: unknown): string =>
     value == null ? '' : String(value);
 
-const App = () => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const chartRef = useRef<Chart | null>(null);
+// ringRadii spreads concentric pie rings across the radial band (innermost
+// first). A donut leaves a centre hole; a single-layer pie fills the centre.
+const ringRadii = (
+    index: number,
+    total: number,
+    donut: boolean,
+): {inner: string; outer: string} => {
+    const holeStart = donut ? 35 : 0;
+    const end = 80;
+    const width = (end - holeStart) / total;
+    return {
+        inner: `${holeStart + index * width}%`,
+        outer: `${holeStart + (index + 1) * width}%`,
+    };
+};
 
+// ChartView renders the active chart with shadcn/Recharts and the default
+// --chart-N palette. cartesian -> ComposedChart (bar/line/area, stacking, flip);
+// proportional -> PieChart (pie/donut, concentric layer rings).
+const ChartView = ({
+    chartKind,
+    toolArgs,
+    rows,
+}: {
+    chartKind: 'cartesian' | 'proportional';
+    toolArgs: Record<string, unknown>;
+    rows: Row[];
+}) => {
+    if (chartKind === 'cartesian') {
+        const model = toCartesianModel(toolArgs as unknown as CartesianInput, rows);
+        return (
+            <ChartContainer config={model.config} className="min-h-72 w-full">
+                <ComposedChart
+                    data={model.data}
+                    layout={model.flip ? 'vertical' : 'horizontal'}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    {model.flip ? (
+                        <>
+                            <XAxis type="number" tickLine={false} axisLine={false} />
+                            <YAxis
+                                type="category"
+                                dataKey={model.xKey}
+                                width={88}
+                                tickLine={false}
+                                axisLine={false}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <XAxis
+                                dataKey={model.xKey}
+                                tickLine={false}
+                                axisLine={false}
+                            />
+                            <YAxis tickLine={false} axisLine={false} />
+                        </>
+                    )}
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    {model.series.map((s) =>
+                        s.kind === 'bar' ? (
+                            <Bar
+                                key={s.key}
+                                dataKey={s.key}
+                                name={s.label}
+                                fill={s.color}
+                                stackId={s.stackId}
+                                radius={4}
+                            />
+                        ) : s.kind === 'area' ? (
+                            <Area
+                                key={s.key}
+                                dataKey={s.key}
+                                name={s.label}
+                                type={s.type}
+                                stroke={s.color}
+                                fill={s.color}
+                                fillOpacity={0.3}
+                                stackId={s.stackId}
+                                dot={false}
+                            />
+                        ) : (
+                            <Line
+                                key={s.key}
+                                dataKey={s.key}
+                                name={s.label}
+                                type={s.type}
+                                stroke={s.color}
+                                strokeWidth={2}
+                                dot={false}
+                            />
+                        ),
+                    )}
+                </ComposedChart>
+            </ChartContainer>
+        );
+    }
+
+    const model = toProportionalModel(toolArgs as unknown as ProportionalInput, rows);
+    return (
+        <ChartContainer config={model.config} className="min-h-72 w-full">
+            <PieChart>
+                <ChartTooltip
+                    content={
+                        <ChartTooltipContent
+                            formatter={(value) => model.format(Number(value))}
+                        />
+                    }
+                />
+                {model.layers.map((layer, li) => {
+                    const {inner, outer} = ringRadii(
+                        li,
+                        model.layers.length,
+                        model.donut,
+                    );
+                    return (
+                        <Pie
+                            key={li}
+                            // Recharts v3 colors each slice from its datum's
+                            // `fill`, so carry the palette color on the data.
+                            data={layer.data.map((slice) => ({
+                                ...slice,
+                                fill: slice.color,
+                            }))}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={inner}
+                            outerRadius={outer}
+                            strokeWidth={1}
+                        />
+                    );
+                })}
+                <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+            </PieChart>
+        </ChartContainer>
+    );
+};
+
+const App = () => {
     // The render tool's arguments (the axis/series or value/layer mapping) and
     // the discriminator naming which chart to draw, both pushed by the host.
     const [toolArgs, setToolArgs] = useState<Record<string, unknown> | null>(
@@ -136,7 +253,7 @@ const App = () => {
     // Mirror host style variables + theme onto the document so shadcn tokens and
     // the `.dark` variant track the host app.
     useHostStyleVariables(app);
-    const theme = useDocumentTheme() as TTheme;
+    const theme = useDocumentTheme();
 
     // Once connected and we know which query to chart, load its full result over
     // the bridge via the app-only fetch_chart_data tool.
@@ -176,34 +293,6 @@ const App = () => {
         if ('x' in toolArgs) return 'cartesian';
         return null;
     }, [tool, toolArgs]);
-
-    // (Re)draw whenever data, mapping, theme or the active tab changes. The
-    // canvas only exists while the Chart tab is shown, so recreate on entry and
-    // destroy on leave (cheap, and avoids hidden-canvas resize quirks).
-    useEffect(() => {
-        if (activeTab !== 'chart') {
-            return;
-        }
-        const canvas = canvasRef.current;
-        if (!canvas || !data || !toolArgs || !chartKind) {
-            return;
-        }
-        chartRef.current?.destroy();
-        const config =
-            chartKind === 'cartesian'
-                ? buildCartesianConfig(
-                      toolArgs as unknown as CartesianInput,
-                      data.rows,
-                      theme,
-                  )
-                : buildProportionalConfig(
-                      toolArgs as unknown as ProportionalInput,
-                      data.rows,
-                      theme,
-                  );
-        chartRef.current = new Chart(canvas, config);
-        return () => chartRef.current?.destroy();
-    }, [data, toolArgs, chartKind, theme, activeTab]);
 
     // The host opens links in the user's real browser; only offer export when it
     // advertises that capability.
@@ -283,9 +372,17 @@ const App = () => {
                 </div>
 
                 <TabsContent value="chart">
-                    <div className="relative h-72">
-                        <canvas ref={canvasRef} />
-                    </div>
+                    {chartKind ? (
+                        <ChartView
+                            chartKind={chartKind}
+                            toolArgs={toolArgs ?? {}}
+                            rows={data.rows}
+                        />
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                            No chart mapping provided.
+                        </p>
+                    )}
                 </TabsContent>
 
                 <TabsContent value="table">
