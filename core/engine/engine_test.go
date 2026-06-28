@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"core/engine/encoding"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,4 +52,38 @@ func TestLoadMissingFileTolerated(t *testing.T) {
 	svc, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), Limits{})
 	require.NoError(t, err)
 	assert.Empty(t, svc.List())
+}
+
+func TestWrapPaged(t *testing.T) {
+	assert.Equal(t,
+		"SELECT * FROM (SELECT id FROM t) AS _tablekit_page LIMIT 11 OFFSET 0",
+		wrapPaged("SELECT id FROM t", 0, 10))
+
+	// Trailing semicolon and surrounding whitespace are stripped so the query
+	// is a valid subquery; offset and limit+1 over-fetch are applied.
+	assert.Equal(t,
+		"SELECT * FROM (SELECT id FROM t) AS _tablekit_page LIMIT 6 OFFSET 20",
+		wrapPaged("  SELECT id FROM t ;  ", 20, 5))
+}
+
+func TestTrimToLimit(t *testing.T) {
+	// One extra row over the limit -> trimmed back to limit, hasMore true.
+	over := &encoding.Result{
+		Rows:     []map[string]any{{"n": 1}, {"n": 2}, {"n": 3}},
+		RowCount: 3,
+	}
+	hasMore := trimToLimit(over, 2)
+	assert.True(t, hasMore)
+	assert.Equal(t, 2, over.RowCount)
+	assert.Len(t, over.Rows, 2)
+
+	// Exactly the limit (no over-fetched row) -> untouched, hasMore false.
+	exact := &encoding.Result{
+		Rows:     []map[string]any{{"n": 1}, {"n": 2}},
+		RowCount: 2,
+	}
+	hasMore = trimToLimit(exact, 2)
+	assert.False(t, hasMore)
+	assert.Equal(t, 2, exact.RowCount)
+	assert.Len(t, exact.Rows, 2)
 }
