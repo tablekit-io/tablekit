@@ -427,11 +427,19 @@ const App = () => {
                 </TabsContent>
 
                 <TabsContent value="sql">
-                    <div className="max-h-72 overflow-auto rounded-md border border-border text-sm">
+                    <div className="max-h-72 overflow-auto rounded-md border border-border bg-muted text-sm">
                         <SyntaxHighlighter
                             language="sql"
                             style={theme === 'dark' ? oneDark : oneLight}
-                            customStyle={{margin: 0, background: 'transparent'}}
+                            // The prism theme paints a background on both <pre>
+                            // and <code>; clear both so the single bg-muted panel
+                            // shows through uniformly instead of per-line boxes.
+                            customStyle={{
+                                margin: 0,
+                                padding: '0.75rem',
+                                background: 'transparent',
+                            }}
+                            codeTagProps={{style: {background: 'transparent'}}}
                             wrapLongLines>
                             {data.sql || '-- no SQL available'}
                         </SyntaxHighlighter>
