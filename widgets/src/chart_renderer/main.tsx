@@ -196,7 +196,19 @@ const ChartView = ({
                 <ChartTooltip
                     content={
                         <ChartTooltipContent
-                            formatter={(value) => model.format(Number(value))}
+                            // Radial charts have no axis label, so the custom
+                            // formatter (which replaces the whole row) must carry
+                            // both the slice name (category) and the value.
+                            formatter={(value, name) => (
+                                <span className="flex w-full items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">
+                                        {String(name)}
+                                    </span>
+                                    <span className="font-medium tabular-nums text-foreground">
+                                        {model.format(Number(value))}
+                                    </span>
+                                </span>
+                            )}
                         />
                     }
                 />
