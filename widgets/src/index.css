@@ -1,4 +1,11 @@
-@import 'tailwindcss';
+/* Scope Tailwind's content auto-detection to this src/ directory (the dir of
+   this CSS file). Without this, Tailwind scans the whole project — including the
+   build output dir, which in the dev container is bind-mounted from
+   core/mcp/ui/widgets and is NOT covered by the repo-root .gitignore there. It
+   would then watch the inlined dist HTML, and each vite rebuild rewriting dist
+   would retrigger a rebuild — an infinite build loop (and Air rebuilding core in
+   lockstep). Scoping to src/ keeps scanning to the actual source. */
+@import 'tailwindcss' source('.');
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
