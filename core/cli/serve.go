@@ -18,6 +18,7 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		defer appServices.Close()
 		app := http.Build(appServices)
 
 		appServer := &nethttp.Server{Addr: ":" + appServices.Config.AppPort, Handler: app.AppEngine}

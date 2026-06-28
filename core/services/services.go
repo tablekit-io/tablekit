@@ -5,20 +5,25 @@
 package services
 
 import (
+	"database/sql"
 	"time"
 
+	"core/db"
 	"core/engine"
 	"core/services/config"
 	"core/services/oauth"
+	"core/services/queries"
 	"core/services/store"
 )
 
 // Services holds the shared services every layer needs.
 type Services struct {
-	Config *config.Config
-	Store  *store.Store
-	Engine *engine.Service
-	Issuer *oauth.Issuer
+	Config  *config.Config
+	Store   *store.Store
+	Engine  *engine.Service
+	Issuer  *oauth.Issuer
+	DB      *sql.DB
+	Queries *queries.Repository
 }
 
 // New loads config from the environment, opens the on-disk store, and loads the
@@ -41,10 +46,25 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
+	database, err := db.Open(configService.DataDir)
+	if err != nil {
+		return nil, err
+	}
 	return &Services{
-		Config: configService,
-		Store:  storageService,
-		Engine: engineService,
-		Issuer: issuer,
+		Config:  configService,
+		Store:   storageService,
+		Engine:  engineService,
+		Issuer:  issuer,
+		DB:      database,
+		Queries: queries.New(database),
 	}, nil
+}
+
+// Close releases resources held by the services (currently the SQLite handle).
+// Call it on shutdown.
+func (s *Services) Close() error {
+	if s.DB != nil {
+		return s.DB.Close()
+	}
+	return nil
 }
