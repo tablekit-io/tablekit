@@ -33,12 +33,13 @@ type runQueryInput struct {
 // runQueryOutput is run_query's structured result: stats plus the result_key the
 // other tools take. Rows are inlined only when include_results was set.
 type runQueryOutput struct {
-	ResultKey    string           `json:"result_key" jsonschema:"the key identifying this stored query; pass it to retrieve_results, render_*_chart and get_export_url"`
-	RowCount     int              `json:"row_count" jsonschema:"number of rows in this first page (at most default_limit)"`
-	HasMore      bool             `json:"has_more" jsonschema:"true when more rows exist beyond this first page"`
-	DefaultLimit int              `json:"default_limit" jsonschema:"the page size retrieve_results uses by default"`
-	Columns      []columnInfo     `json:"columns" jsonschema:"the result columns, in order"`
-	Rows         []map[string]any `json:"rows,omitempty" jsonschema:"the first page of rows, only present when include_results was set"`
+	ResultKey     string           `json:"result_key" jsonschema:"the key identifying this stored query; pass it to retrieve_results, render_*_chart and get_export_url"`
+	RowCount      int              `json:"row_count" jsonschema:"number of rows in this first page (at most default_limit)"`
+	HasMore       bool             `json:"has_more" jsonschema:"true when more rows exist beyond this first page"`
+	DefaultLimit  int              `json:"default_limit" jsonschema:"the page size retrieve_results uses by default"`
+	Columns       []columnInfo     `json:"columns" jsonschema:"the result columns, in order"`
+	Rows          []map[string]any `json:"rows,omitempty" jsonschema:"the first page of rows, only present when include_results was set"`
+	HintForAgents string           `json:"hint_for_agents,omitempty" jsonschema:"guidance for the calling agent on how best to use this result"`
 }
 
 // runQuery executes read-only SQL, stores the query descriptor, and returns a
@@ -67,15 +68,18 @@ func (h *Handlers) runQuery(ctx context.Context, _ *mcp.CallToolRequest, in runQ
 		DefaultLimit: defaultLimit,
 		Columns:      toColumnInfos(result.Columns),
 	}
-	if in.IncludeResults {
-		out.Rows = result.Rows
-	}
-
 	summary := fmt.Sprintf(
 		"Stored query %s against %q: %d row(s) in the first page%s. "+
 			"Pass result_key to retrieve_results (to page), render_cartesian_series_chart / render_proportional_chart (to chart), or get_export_url (to download).",
 		key, in.Database, result.RowCount, moreSuffix(hasMore),
 	)
+	// When rows are inlined the agent has data in hand, so nudge it toward the
+	// chart tools (same as retrieve_results).
+	if in.IncludeResults {
+		out.Rows = result.Rows
+		out.HintForAgents = chartHint
+		summary += " " + chartHint
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: summary}},
 	}, out, nil

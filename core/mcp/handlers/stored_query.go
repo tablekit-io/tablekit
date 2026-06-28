@@ -45,6 +45,14 @@ const (
 	chartMaxBytes = 16 << 20 // 16 MiB
 )
 
+// chartHint nudges the agent toward the dedicated chart tools whenever it has
+// rows in hand (run_query with include_results, or retrieve_results). Surfaced
+// both as a structured hint_for_agents field and appended to the text content so
+// it is seen regardless of how the client reads the result. The goal is
+// consistent tablekit visualizations users can build muscle memory around,
+// rather than the agent hand-formatting charts itself.
+const chartHint = "If the user wants a visualization, prefer the render_cartesian_series_chart or render_proportional_chart tools (pass this result_key) instead of formatting the data yourself — this keeps tablekit's visualizations consistent so users benefit from muscle memory."
+
 // enginePage builds engine.PageOptions; a zero maxBytes lets the engine apply
 // its default.
 func enginePage(offset, limit, maxBytes int) engine.PageOptions {

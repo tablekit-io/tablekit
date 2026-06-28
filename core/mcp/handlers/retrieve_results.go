@@ -19,13 +19,14 @@ type retrieveResultsInput struct {
 
 // retrieveResultsOutput is one paginated window of a stored query's rows.
 type retrieveResultsOutput struct {
-	Skip         int              `json:"skip" jsonschema:"the offset this window started at"`
-	Limit        int              `json:"limit" jsonschema:"the page size used for this window"`
-	Columns      []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
-	Rows         []map[string]any `json:"rows" jsonschema:"the rows in this window"`
-	RowsReturned int              `json:"rows_returned" jsonschema:"number of rows in this window"`
-	HasMore      bool             `json:"has_more" jsonschema:"true when more rows exist beyond this window"`
-	NextSkip     *int             `json:"next_skip" jsonschema:"the skip to pass for the next window, or null when this is the last window"`
+	Skip          int              `json:"skip" jsonschema:"the offset this window started at"`
+	Limit         int              `json:"limit" jsonschema:"the page size used for this window"`
+	Columns       []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
+	Rows          []map[string]any `json:"rows" jsonschema:"the rows in this window"`
+	RowsReturned  int              `json:"rows_returned" jsonschema:"number of rows in this window"`
+	HasMore       bool             `json:"has_more" jsonschema:"true when more rows exist beyond this window"`
+	NextSkip      *int             `json:"next_skip" jsonschema:"the skip to pass for the next window, or null when this is the last window"`
+	HintForAgents string           `json:"hint_for_agents,omitempty" jsonschema:"guidance for the calling agent on how best to use this result"`
 }
 
 // retrieveResults pages through a stored query's rows. It re-runs the stored SQL
@@ -63,16 +64,17 @@ func (h *Handlers) retrieveResults(ctx context.Context, _ *mcp.CallToolRequest, 
 	}
 
 	out := retrieveResultsOutput{
-		Skip:         skip,
-		Limit:        limit,
-		Columns:      columns,
-		Rows:         rows,
-		RowsReturned: len(rows),
-		HasMore:      hasMore,
-		NextSkip:     nextSkip,
+		Skip:          skip,
+		Limit:         limit,
+		Columns:       columns,
+		Rows:          rows,
+		RowsReturned:  len(rows),
+		HasMore:       hasMore,
+		NextSkip:      nextSkip,
+		HintForAgents: chartHint,
 	}
-	summary := fmt.Sprintf("Rows %d–%d of stored query %s: %d row(s)%s.",
-		skip, skip+len(rows), in.Key, len(rows), moreSuffix(hasMore))
+	summary := fmt.Sprintf("Rows %d–%d of stored query %s: %d row(s)%s. %s",
+		skip, skip+len(rows), in.Key, len(rows), moreSuffix(hasMore), chartHint)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: summary}},
 	}, out, nil
