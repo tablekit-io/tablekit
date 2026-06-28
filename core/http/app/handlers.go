@@ -4,6 +4,7 @@
 package app
 
 import (
+	"core/http/app/exports"
 	"core/http/app/oauth"
 	"core/http/commons"
 	"core/services"
@@ -28,4 +29,8 @@ func RegisterHandlers(engine *gin.Engine, appServices *services.Services) {
 	// The SDK's bearer middleware + streamable handler are net/http; gin.WrapH
 	// adapts them. /mcp must accept GET, POST and DELETE.
 	engine.Any("/mcp", gin.WrapH(MCPRoute(appServices)))
+
+	// Signed export downloads. Deliberately mounted outside the /mcp bearer guard:
+	// the export token in the path is the sole proof of access.
+	exports.NewHandlers(appServices).Register(engine)
 }

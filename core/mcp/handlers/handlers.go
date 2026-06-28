@@ -45,6 +45,7 @@ func (h *Handlers) Register(s *mcp.Server) {
 	h.registerRunQuery(s)
 	h.registerRetrieveResults(s)
 	h.registerFetchChartData(s)
+	h.registerGetExportURL(s)
 	registerWidgetResources(s)
 }
 

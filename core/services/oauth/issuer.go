@@ -23,6 +23,10 @@ const (
 	// fails VerifyAccess, so stripping the TokenPrefix and presenting the raw JWT
 	// on the OAuth path cannot bypass the revocation check.
 	audienceBearer = "mcp-bearer"
+	// audienceExport is the audience for short-lived signed export links handed to
+	// get_export_url. Distinct from the others so an export token is only ever
+	// honoured by the export endpoint, never on the MCP/OAuth paths.
+	audienceExport = "mcp-export"
 	// Subject is fixed: this is a single-user server.
 	subject = "user:owner"
 	// UserID is the bare identifier carried into the MCP session.
@@ -40,11 +44,17 @@ const TokenPrefix = "tablekit_pat_"
 // months.
 const bearerMonths = 6
 
-// Claims is the JWT payload. cid = client row id, chain = refresh chain id.
+// exportTTL is the validity window of a signed export link. Short: the link is
+// handed straight to the user to click, not stored.
+const exportTTL = 5 * time.Minute
+
+// Claims is the JWT payload. cid = client row id, chain = refresh chain id,
+// qk = the stored query key an export token authorizes.
 type Claims struct {
 	CID   string `json:"cid"`
 	Chain string `json:"chain"`
 	Scope string `json:"scope"`
+	QK    string `json:"qk,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -82,6 +92,7 @@ type issueArgs struct {
 	chainID  string
 	scope    string
 	tokenID  string
+	queryKey string
 }
 
 func (i *Issuer) sign(a issueArgs, aud string, expiresAt time.Time) (token string, iat time.Time, err error) {
@@ -90,6 +101,7 @@ func (i *Issuer) sign(a issueArgs, aud string, expiresAt time.Time) (token strin
 		CID:   a.clientID,
 		Chain: a.chainID,
 		Scope: a.scope,
+		QK:    a.queryKey,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        a.tokenID,
 			Issuer:    i.configService.PublicBaseURL,
@@ -129,6 +141,15 @@ func (i *Issuer) IssueBearer(clientID, tokenID string) (token string, expiresAt 
 	return token, expiresAt, err
 }
 
+// IssueExport mints a short-lived token authorizing a CSV/JSON export of the
+// given stored query. The query key travels in the qk claim under the export
+// audience, so the token is useless anywhere but the export endpoint.
+func (i *Issuer) IssueExport(queryKey string) (string, error) {
+	args := issueArgs{scope: Scope, queryKey: queryKey}
+	t, _, err := i.sign(args, audienceExport, time.Now().Add(exportTTL))
+	return t, err
+}
+
 func (i *Issuer) verify(token, aud string) (*Claims, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
@@ -162,6 +183,12 @@ func (i *Issuer) VerifyRefresh(token string) (*Claims, error) {
 // the token id (claims.ID) in the store.
 func (i *Issuer) VerifyBearer(token string) (*Claims, error) {
 	return i.verify(token, audienceBearer)
+}
+
+// VerifyExport validates a signed export token (signature, issuer, audience,
+// expiry) and returns its claims; claims.QK is the stored query key to export.
+func (i *Issuer) VerifyExport(token string) (*Claims, error) {
+	return i.verify(token, audienceExport)
 }
 
 // BearerTokenID extracts the jti from a bearer JWT WITHOUT verifying its

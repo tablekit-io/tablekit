@@ -108,6 +108,33 @@ func TestBearerAudienceSeparation(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestExportTokenRoundTrip(t *testing.T) {
+	issuer := newIssuer(t, testConfig())
+
+	token, err := issuer.IssueExport("query-key-1")
+	require.NoError(t, err)
+
+	claims, err := issuer.VerifyExport(token)
+	require.NoError(t, err)
+	assert.Equal(t, "query-key-1", claims.QK)
+}
+
+func TestExportAudienceSeparation(t *testing.T) {
+	issuer := newIssuer(t, testConfig())
+
+	export, err := issuer.IssueExport("qk")
+	require.NoError(t, err)
+	access, err := issuer.IssueAccess("c", "ch", "mcp")
+	require.NoError(t, err)
+
+	// An export token is only honoured by the export endpoint, never on the
+	// MCP/OAuth paths, and an access token can't be used as an export link.
+	_, err = issuer.VerifyAccess(export)
+	assert.Error(t, err)
+	_, err = issuer.VerifyExport(access)
+	assert.Error(t, err)
+}
+
 func TestBearerTokenID(t *testing.T) {
 	issuer := newIssuer(t, testConfig())
 
