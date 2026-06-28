@@ -12,6 +12,10 @@ services:
       # The stable network throw-away e2e DB containers attach to, so code in
       # this container can reach them by name (e.g. testdb:5432).
       TABLEKIT_E2E_DOCKER_NETWORK: tablekit
+      # Point run_sql at the committed dev DB config (core/ is bind-mounted to
+      # /app below). Overrides the default ./data/databases.yaml, which is
+      # gitignored. databases.dev.yaml targets the postgres service (emerald DB).
+      DATABASES_FILE: /app/databases.dev.yaml
     # host.docker.internal resolves to the host on Docker Desktop natively; the
     # host-gateway mapping gives Linux the same name for the published-port
     # fallback path (see README).
@@ -51,6 +55,45 @@ services:
       timeout: 3s
       retries: 3
       start_period: 60s
+    # Wait for postgres to finish seeding emerald before core boots, so the
+    # first run_sql has a database to hit.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Dev-only: a real Postgres pre-seeded with the emerald sample database, so
+  # `docker compose up` gives run_sql actual data to query (and a real ChatGPT
+  # MCP client something realistic to pair against). The seed reuses the e2e
+  # fixture; the official image runs *.sql in initdb.d against POSTGRES_DB on
+  # first init only — re-seed with `docker compose down -v`.
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pw
+      POSTGRES_DB: emerald
+    networks:
+      - tablekit
+    ports:
+      # Published so a host psql/GUI can connect to localhost:5432 too.
+      - "5432:5432"
+    volumes:
+      # Reuse the e2e emerald dump as an init script (no CREATE DATABASE inside,
+      # so it lands in POSTGRES_DB=emerald).
+      - type: bind
+        source: ./core/e2e/database/test-data/emerald.sql
+        target: /docker-entrypoint-initdb.d/emerald.sql
+        read_only: true
+      # Persist the seeded data across container recreation.
+      - type: volume
+        source: pgdata
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d emerald"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   # Dev-only: builds the @tablekit/widgets MCP Apps templates with bun + vite in
   # watch mode. Output lands in core/mcp/ui/widgets (bind-mounted below),
@@ -79,6 +122,8 @@ services:
 
 volumes:
   gocache:
+  # Seeded emerald data for the dev postgres service.
+  pgdata:
 
 networks:
   # Stable, explicitly-named network (independent of the compose project dir) so

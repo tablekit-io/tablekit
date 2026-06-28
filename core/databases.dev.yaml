@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=./engine/config/schemas/databases.schema.json
+# Dev-only: points at the postgres service in docker-compose.yml (emerald DB).
+# Wired in via DATABASES_FILE=/app/databases.dev.yaml in the core service.
+databases:
+  emerald:
+    type: postgres
+    details:
+      host: postgres        # docker-compose service name on the tablekit network
+      port: 5432
+      database: emerald
+      username: postgres
+      password: pw
