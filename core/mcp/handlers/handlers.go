@@ -8,19 +8,31 @@ import (
 
 	"core/engine"
 	"core/mcp/ui"
+	"core/services/oauth"
+	"core/services/queries"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Handlers serves the MCP tools. It carries the query engine, the one dependency
-// the tools need. Construct with New and wire with Register.
+// Handlers serves the MCP tools. It carries the dependencies the tools need: the
+// query engine, the stored-query repository, the JWT issuer (for signed export
+// URLs) and the public base URL those URLs are built against. Construct with New
+// and wire with Register.
 type Handlers struct {
-	Engine *engine.Service
+	Engine        *engine.Service
+	Queries       *queries.Repository
+	Issuer        *oauth.Issuer
+	PublicBaseURL string
 }
 
-// New wires the MCP tool handlers to the query engine.
-func New(engineService *engine.Service) *Handlers {
-	return &Handlers{Engine: engineService}
+// New wires the MCP tool handlers to their dependencies.
+func New(engineService *engine.Service, queriesRepo *queries.Repository, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
+	return &Handlers{
+		Engine:        engineService,
+		Queries:       queriesRepo,
+		Issuer:        issuer,
+		PublicBaseURL: publicBaseURL,
+	}
 }
 
 // Register wires every tool and the built widget UI resources onto s.
@@ -30,6 +42,9 @@ func (h *Handlers) Register(s *mcp.Server) {
 	h.registerHelloWorldInteractiveData(s)
 	h.registerListDatabases(s)
 	h.registerRunSQL(s)
+	h.registerRunQuery(s)
+	h.registerRetrieveResults(s)
+	h.registerFetchChartData(s)
 	registerWidgetResources(s)
 }
 

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"core/mcp/ui"
+	"core/services"
+	"core/services/config"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -18,8 +20,11 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	ctx := context.Background()
 	serverT, clientT := mcp.NewInMemoryTransports()
 
-	// Tools don't touch Services yet, so a nil bundle is fine for protocol tests.
-	server := newServer(nil)
+	// Registration only stores the service handles; the protocol tests below list
+	// tools and call the self-contained hello_world, neither of which touches the
+	// engine/queries/issuer. A bundle with just a Config (for PublicBaseURL) is
+	// enough — the data/chart tools that need those handles aren't exercised here.
+	server := newServer(&services.Services{Config: &config.Config{}})
 	ss, err := server.Connect(ctx, serverT, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ss.Close() })

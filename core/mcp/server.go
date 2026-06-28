@@ -7,29 +7,34 @@ package mcp
 import (
 	"net/http"
 
-	"core/engine"
 	"core/mcp/handlers"
+	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // newServer builds the MCP server and registers its tools and resources, wired
-// to the query engine.
-func newServer(engineService *engine.Service) *mcp.Server {
+// to the shared services the tools depend on.
+func newServer(appServices *services.Services) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "tablekit",
 		Title:   "tablekit MCP server",
 		Version: "0.1.0",
 	}, nil)
-	handlers.New(engineService).Register(server)
+	handlers.New(
+		appServices.Engine,
+		appServices.Queries,
+		appServices.Issuer,
+		appServices.Config.PublicBaseURL,
+	).Register(server)
 	return server
 }
 
 // StreamableHandler returns the raw (unauthenticated) Streamable HTTP handler
-// for /mcp, wired to the query engine. The caller is responsible for applying
+// for /mcp, wired to the shared services. The caller is responsible for applying
 // auth.
-func StreamableHandler(engineService *engine.Service) http.Handler {
-	server := newServer(engineService)
+func StreamableHandler(appServices *services.Services) http.Handler {
+	server := newServer(appServices)
 	return mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{
