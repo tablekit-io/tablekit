@@ -41,12 +41,10 @@ func TestBuildConfigModes(t *testing.T) {
 	}
 }
 
-func TestBuildConfigNilDefaultsToPrefer(t *testing.T) {
+func TestBuildConfigNilDefaultsToDisable(t *testing.T) {
 	out, err := BuildConfig(nil, "db.example")
 	require.NoError(t, err)
-	require.NotNil(t, out)
-	assert.True(t, out.InsecureSkipVerify)
-	assert.Equal(t, "db.example", out.ServerName)
+	assert.Nil(t, out)
 }
 
 func TestBuildConfigUnknownMode(t *testing.T) {

@@ -10,8 +10,5 @@ databases:
       database: emerald
       username: postgres
       password: pw
-    # The dev postgres container has SSL off. The default mode ("prefer") still
-    # requires TLS (no libpq-style plaintext fallback), so connections fail
-    # without this. Disable TLS for plain local dev.
-    tls:
-      mode: disable
+      # The dev postgres container has SSL off; TLS defaults to disabled, so no
+      # tls block is needed here.

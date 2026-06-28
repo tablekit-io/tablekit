@@ -349,8 +349,8 @@
         "verify-ca",
         "verify-full"
       ],
-      "default": "prefer",
-      "description": "PostgreSQL-style SSL mode. disable: no TLS. allow: plaintext, TLS only if forced by server. prefer (default): TLS if the server offers it, silent plaintext fallback otherwise. require: TLS but no certificate verification. verify-ca: verify the server certificate chain against the CA. verify-full: verify the chain AND the hostname. For MySQL/MariaDB, any value other than disable enables TLS; verify-ca/verify-full enforce certificate validation."
+      "default": "disable",
+      "description": "PostgreSQL-style SSL mode. disable (default): no TLS. allow: TLS without verification (no plaintext fallback). prefer: TLS without verification (no plaintext fallback). require: TLS but no certificate verification. verify-ca: verify the server certificate chain against the CA. verify-full: verify the chain AND the hostname. For MySQL/MariaDB, any value other than disable enables TLS; verify-ca/verify-full enforce certificate validation."
     },
     "tls": {
       "type": "object",

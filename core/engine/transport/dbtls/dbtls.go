@@ -25,8 +25,12 @@ import (
 //
 // Note: prefer/allow do not replicate libpq's silent plaintext fallback; they
 // require TLS without verification.
+//
+// The default when no mode is given is "disable" (no TLS): there is no plaintext
+// fallback, so a TLS default would break plain connections to servers without
+// SSL. Opt into encryption explicitly via the mode field.
 func BuildConfig(cfg *config.TLSSettings, serverName string) (*tls.Config, error) {
-	mode := "prefer"
+	mode := "disable"
 	if cfg != nil && cfg.Mode != "" {
 		mode = cfg.Mode
 	}

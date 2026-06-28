@@ -120,7 +120,7 @@ databases:
       username: app_ro
       password: { from: env, env: PRIMARY_PW }
     tls:
-      mode: verify-full      # disable | allow | prefer (default) | require | verify-ca | verify-full
+      mode: verify-full      # disable (default) | allow | prefer | require | verify-ca | verify-full
       rootCertFilePath: /etc/ssl/db-ca.pem
   reporting:
     type: postgres
