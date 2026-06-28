@@ -1,4 +1,6 @@
-package engine
+// Package dbtls turns configured TLS settings into a *tls.Config, mapping the
+// libpq-style sslmode names onto Go's verification knobs.
+package dbtls
 
 import (
 	"crypto/tls"
@@ -6,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"core/engine/config"
 )
 
-// buildTLS turns the configured TLS settings into a *tls.Config, or nil when
+// BuildConfig turns the configured TLS settings into a *tls.Config, or nil when
 // TLS is disabled. serverName must be the real database host even when the
 // connection is dialled through a local SSH tunnel, so SNI and certificate
 // hostname checks target the right name.
@@ -21,10 +25,10 @@ import (
 //
 // Note: prefer/allow do not replicate libpq's silent plaintext fallback; they
 // require TLS without verification.
-func buildTLS(cfg *tlsSettings, serverName string) (*tls.Config, error) {
+func BuildConfig(cfg *config.TLSSettings, serverName string) (*tls.Config, error) {
 	mode := "prefer"
-	if cfg != nil && cfg.mode != "" {
-		mode = cfg.mode
+	if cfg != nil && cfg.Mode != "" {
+		mode = cfg.Mode
 	}
 	if mode == "disable" {
 		return nil, nil
@@ -43,10 +47,10 @@ func buildTLS(cfg *tlsSettings, serverName string) (*tls.Config, error) {
 		return nil, fmt.Errorf("unknown tls mode %q", mode)
 	}
 
-	if cfg != nil && cfg.rootCertFilePath != "" {
-		pem, err := os.ReadFile(cfg.rootCertFilePath)
+	if cfg != nil && cfg.RootCertFilePath != "" {
+		pem, err := os.ReadFile(cfg.RootCertFilePath)
 		if err != nil {
-			return nil, fmt.Errorf("read root cert %q: %w", cfg.rootCertFilePath, err)
+			return nil, fmt.Errorf("read root cert %q: %w", cfg.RootCertFilePath, err)
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pem) {
@@ -55,8 +59,8 @@ func buildTLS(cfg *tlsSettings, serverName string) (*tls.Config, error) {
 		out.RootCAs = pool
 	}
 
-	if cfg != nil && cfg.clientCertFilePath != "" {
-		cert, err := tls.LoadX509KeyPair(cfg.clientCertFilePath, cfg.clientKeyFilePath)
+	if cfg != nil && cfg.ClientCertFilePath != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.ClientCertFilePath, cfg.ClientKeyFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("load client cert/key: %w", err)
 		}

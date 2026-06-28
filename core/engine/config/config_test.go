@@ -1,4 +1,4 @@
-package engine
+package config
 
 import (
 	"os"
@@ -31,25 +31,19 @@ databases:
       host: my.internal
       username: reader
 `)
-	svc, err := Load(path, Limits{})
+	databases, err := Load(path)
 	require.NoError(t, err)
 
-	pg := svc.databases["pg"]
-	require.NotNil(t, pg.details)
-	assert.Equal(t, 5432, pg.details.port)
-	assert.Equal(t, "postgres", pg.details.database)
-	assert.Equal(t, "app_ro", pg.details.username)
+	pg := databases["pg"]
+	require.NotNil(t, pg.Details)
+	assert.Equal(t, 5432, pg.Details.Port)
+	assert.Equal(t, "postgres", pg.Details.Database)
+	assert.Equal(t, "app_ro", pg.Details.Username)
 
-	my := svc.databases["my"]
-	require.NotNil(t, my.details)
-	assert.Equal(t, 3306, my.details.port)
-	assert.Equal(t, "reader", my.details.username)
-
-	infos := svc.List()
-	require.Len(t, infos, 2)
-	assert.Equal(t, "my", infos[0].Name)
-	assert.Equal(t, "mysql", infos[0].Type)
-	assert.Equal(t, "pg", infos[1].Name)
+	my := databases["my"]
+	require.NotNil(t, my.Details)
+	assert.Equal(t, 3306, my.Details.Port)
+	assert.Equal(t, "reader", my.Details.Username)
 }
 
 func TestLoadSecretResolution(t *testing.T) {
@@ -72,19 +66,19 @@ databases:
     type: postgres
     details: { host: h, username: u, password: { from: literal, value: lit-secret } }
 `)
-	svc, err := Load(path, Limits{})
+	databases, err := Load(path)
 	require.NoError(t, err)
 
-	assert.Equal(t, "scalar-secret", svc.databases["scalar"].details.password)
-	assert.Equal(t, "from-env", svc.databases["fromenv"].details.password)
-	assert.Equal(t, "from-file", svc.databases["fromfile"].details.password) // trimmed
-	assert.Equal(t, "lit-secret", svc.databases["fromliteral"].details.password)
+	assert.Equal(t, "scalar-secret", databases["scalar"].Details.Password)
+	assert.Equal(t, "from-env", databases["fromenv"].Details.Password)
+	assert.Equal(t, "from-file", databases["fromfile"].Details.Password) // trimmed
+	assert.Equal(t, "lit-secret", databases["fromliteral"].Details.Password)
 }
 
 func TestLoadMissingFileTolerated(t *testing.T) {
-	svc, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), Limits{})
+	databases, err := Load(filepath.Join(t.TempDir(), "nope.yaml"))
 	require.NoError(t, err)
-	assert.Empty(t, svc.List())
+	assert.Empty(t, databases)
 }
 
 func TestLoadRejectsUnknownType(t *testing.T) {
@@ -94,7 +88,7 @@ databases:
     type: sqlite
     details: { host: h, username: u }
 `)
-	_, err := Load(path, Limits{})
+	_, err := Load(path)
 	assert.Error(t, err)
 }
 
@@ -106,7 +100,7 @@ databases:
     details: { host: h, username: u }
     connectionString: postgres://h/db
 `)
-	_, err := Load(path, Limits{})
+	_, err := Load(path)
 	assert.Error(t, err, "details and connectionString are mutually exclusive (XOR)")
 }
 
@@ -121,18 +115,10 @@ databases:
       host: bastion.internal
       sshKeyFilePath: /tmp/key
 `)
-	svc, err := Load(path, Limits{})
+	databases, err := Load(path)
 	require.NoError(t, err)
-	ssh := svc.databases["tunneled"].ssh
+	ssh := databases["tunneled"].SSH
 	require.NotNil(t, ssh)
-	assert.Equal(t, 22, ssh.port)
-	assert.Equal(t, "deployer", ssh.username)
-}
-
-func TestLimitsDefaults(t *testing.T) {
-	svc, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), Limits{})
-	require.NoError(t, err)
-	assert.Equal(t, 2048, svc.limits.MaxRows)
-	assert.Equal(t, 64*1024, svc.limits.MaxBytes)
-	assert.NotZero(t, svc.limits.StatementTimeout)
+	assert.Equal(t, 22, ssh.Port)
+	assert.Equal(t, "deployer", ssh.Username)
 }

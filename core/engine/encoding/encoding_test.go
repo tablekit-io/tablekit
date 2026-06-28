@@ -1,4 +1,4 @@
-package engine
+package encoding
 
 import (
 	"database/sql/driver"
@@ -37,7 +37,7 @@ func TestNormalizeValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, keep, reason := normalizeValue(tt.in)
+			got, keep, reason := NormalizeValue(tt.in)
 			assert.Equal(t, tt.keep, keep)
 			assert.Equal(t, tt.reason, reason)
 			if tt.keep {
@@ -47,10 +47,10 @@ func TestNormalizeValue(t *testing.T) {
 	}
 }
 
-func TestRowAccumulatorRowCap(t *testing.T) {
-	acc := newRowAccumulator([]string{"n"}, Limits{MaxRows: 2, MaxBytes: 1 << 20})
+func TestAccumulatorRowCap(t *testing.T) {
+	acc := NewAccumulator([]string{"n"}, 2, 1<<20)
 	for i := 0; i < 5; i++ {
-		keep, err := acc.add(map[string]any{"n": i})
+		keep, err := acc.Add(map[string]any{"n": i})
 		require.NoError(t, err)
 		if i < 2 {
 			assert.True(t, keep, "row %d should be kept", i)
@@ -59,43 +59,43 @@ func TestRowAccumulatorRowCap(t *testing.T) {
 			break
 		}
 	}
-	result := acc.result()
+	result := acc.Result()
 	assert.Equal(t, 2, result.RowCount)
 	assert.True(t, result.Truncated)
 }
 
-func TestRowAccumulatorByteCap(t *testing.T) {
+func TestAccumulatorByteCap(t *testing.T) {
 	// Cap small enough that the second row overflows, but the first is always kept.
-	acc := newRowAccumulator([]string{"v"}, Limits{MaxRows: 100, MaxBytes: 20})
-	keep, err := acc.add(map[string]any{"v": "first-row-is-big-enough"})
+	acc := NewAccumulator([]string{"v"}, 100, 20)
+	keep, err := acc.Add(map[string]any{"v": "first-row-is-big-enough"})
 	require.NoError(t, err)
 	assert.True(t, keep, "first row always kept even if over the byte cap")
 
-	keep, err = acc.add(map[string]any{"v": "second"})
+	keep, err = acc.Add(map[string]any{"v": "second"})
 	require.NoError(t, err)
 	assert.False(t, keep, "second row should overflow the byte cap")
 
-	result := acc.result()
+	result := acc.Result()
 	assert.Equal(t, 1, result.RowCount)
 	assert.True(t, result.Truncated)
 }
 
-func TestRowAccumulatorOmitDedupeAndSort(t *testing.T) {
-	acc := newRowAccumulator([]string{"a", "b"}, Limits{MaxRows: 10, MaxBytes: 1 << 20})
-	acc.omit("zeta", "reason-z")
-	acc.omit("alpha", "reason-a")
-	acc.omit("zeta", "reason-z-again") // dedupe: first reason wins
+func TestAccumulatorOmitDedupeAndSort(t *testing.T) {
+	acc := NewAccumulator([]string{"a", "b"}, 10, 1<<20)
+	acc.Omit("zeta", "reason-z")
+	acc.Omit("alpha", "reason-a")
+	acc.Omit("zeta", "reason-z-again") // dedupe: first reason wins
 
-	result := acc.result()
+	result := acc.Result()
 	require.Len(t, result.Omitted, 2)
 	assert.Equal(t, "alpha", result.Omitted[0].Column)
 	assert.Equal(t, "zeta", result.Omitted[1].Column)
 	assert.Equal(t, "reason-z", result.Omitted[1].Reason)
 }
 
-func TestRowAccumulatorEmptyRowsNonNil(t *testing.T) {
-	acc := newRowAccumulator([]string{"a"}, Limits{MaxRows: 10, MaxBytes: 1 << 20})
-	result := acc.result()
+func TestAccumulatorEmptyRowsNonNil(t *testing.T) {
+	acc := NewAccumulator([]string{"a"}, 10, 1<<20)
+	result := acc.Result()
 	assert.NotNil(t, result.Rows)
 	assert.Equal(t, 0, result.RowCount)
 	assert.False(t, result.Truncated)

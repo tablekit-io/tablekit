@@ -1,4 +1,8 @@
-package engine
+// Package encoding turns driver-decoded rows into JSON-friendly results under
+// caller-supplied caps. It owns the public Result shape and the value
+// normalization rules, and depends on nothing else in engine so drivers can use
+// it without dragging in config or connection concerns.
+package encoding
 
 import (
 	"database/sql/driver"
@@ -12,29 +16,52 @@ import (
 // text. It is surfaced to the caller (and the LLM) via Result.Omitted.
 const binaryOmitReason = "binary (non-UTF-8) value not representable as JSON text"
 
-// rowAccumulator collects normalized rows under the configured limits, tracking
+// Result is a query's outcome: the column names, the rows as objects, and flags
+// telling the caller when the result was cut short or had columns dropped.
+type Result struct {
+	Columns   []string         `json:"columns"`
+	Rows      []map[string]any `json:"rows"`
+	RowCount  int              `json:"row_count"`
+	Truncated bool             `json:"truncated"`
+	// Omitted lists columns whose values could not be represented as JSON text
+	// (e.g. binary/non-UTF-8) and were dropped from Rows, so the caller knows
+	// the column exists but was excluded, and why.
+	Omitted []OmittedColumn `json:"omitted,omitempty"`
+}
+
+// OmittedColumn names a dropped column and the reason it was dropped.
+type OmittedColumn struct {
+	Column string `json:"column"`
+	Reason string `json:"reason"`
+}
+
+// Accumulator collects normalized rows under the configured caps, tracking
 // truncation and any columns that had to be dropped.
-type rowAccumulator struct {
-	limits    Limits
+type Accumulator struct {
 	columns   []string
+	maxRows   int
+	maxBytes  int
 	rows      []map[string]any
 	bytes     int
 	truncated bool
 	omitted   map[string]string // column name -> reason
 }
 
-func newRowAccumulator(columns []string, limits Limits) *rowAccumulator {
-	return &rowAccumulator{
-		limits:  limits,
-		columns: columns,
-		omitted: map[string]string{},
+// NewAccumulator builds an accumulator that keeps at most maxRows rows and
+// maxBytes of encoded row data (whichever cap is hit first truncates).
+func NewAccumulator(columns []string, maxRows, maxBytes int) *Accumulator {
+	return &Accumulator{
+		columns:  columns,
+		maxRows:  maxRows,
+		maxBytes: maxBytes,
+		omitted:  map[string]string{},
 	}
 }
 
-// add appends a normalized row. It returns false when a row or byte cap is hit,
+// Add appends a normalized row. It returns false when a row or byte cap is hit,
 // signalling the caller to stop reading; truncated is set in that case.
-func (a *rowAccumulator) add(row map[string]any) (bool, error) {
-	if len(a.rows) >= a.limits.MaxRows {
+func (a *Accumulator) Add(row map[string]any) (bool, error) {
+	if len(a.rows) >= a.maxRows {
 		a.truncated = true
 		return false, nil
 	}
@@ -43,7 +70,7 @@ func (a *rowAccumulator) add(row map[string]any) (bool, error) {
 		return false, err
 	}
 	// Always keep at least one row, even if it alone exceeds the byte cap.
-	if len(a.rows) > 0 && a.bytes+len(encoded) > a.limits.MaxBytes {
+	if len(a.rows) > 0 && a.bytes+len(encoded) > a.maxBytes {
 		a.truncated = true
 		return false, nil
 	}
@@ -52,14 +79,18 @@ func (a *rowAccumulator) add(row map[string]any) (bool, error) {
 	return true, nil
 }
 
-// omit records that a column was dropped, keeping the first reason seen.
-func (a *rowAccumulator) omit(column, reason string) {
+// Omit records that a column was dropped, keeping the first reason seen.
+func (a *Accumulator) Omit(column, reason string) {
 	if _, seen := a.omitted[column]; !seen {
 		a.omitted[column] = reason
 	}
 }
 
-func (a *rowAccumulator) result() *Result {
+// Truncated reports whether a cap has been hit so far.
+func (a *Accumulator) Truncated() bool { return a.truncated }
+
+// Result snapshots the accumulated rows into a Result.
+func (a *Accumulator) Result() *Result {
 	omitted := make([]OmittedColumn, 0, len(a.omitted))
 	for column, reason := range a.omitted {
 		omitted = append(omitted, OmittedColumn{Column: column, Reason: reason})
@@ -79,11 +110,11 @@ func (a *rowAccumulator) result() *Result {
 	}
 }
 
-// normalizeValue converts a driver-decoded value into a JSON-friendly one. The
+// NormalizeValue converts a driver-decoded value into a JSON-friendly one. The
 // bool is false when the value must be omitted (and the string gives the
 // reason). It handles the value shapes both pgx (rows.Values) and database/sql
 // (scan into any) produce.
-func normalizeValue(value any) (any, bool, string) {
+func NormalizeValue(value any) (any, bool, string) {
 	switch typed := value.(type) {
 	case nil:
 		return nil, true, ""
@@ -106,7 +137,7 @@ func normalizeValue(value any) (any, bool, string) {
 		if valuer, ok := value.(driver.Valuer); ok {
 			underlying, err := valuer.Value()
 			if err == nil && underlying != value {
-				return normalizeValue(underlying)
+				return NormalizeValue(underlying)
 			}
 		}
 		return typed, true, ""

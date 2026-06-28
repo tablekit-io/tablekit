@@ -1,4 +1,5 @@
-package engine
+// Package postgres runs read-only queries against PostgreSQL using pgx natively.
+package postgres
 
 import (
 	"context"
@@ -8,6 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"core/engine/config"
+	"core/engine/encoding"
+	"core/engine/transport/dbtls"
+	"core/engine/transport/sshtunnel"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,18 +22,18 @@ import (
 // fires first and yields a clean error rather than a context cancellation.
 const connectGraceTimeout = 5 * time.Second
 
-// postgresEngine runs read-only queries against PostgreSQL using pgx natively.
-type postgresEngine struct{}
+// Engine runs read-only queries against PostgreSQL.
+type Engine struct{}
 
-func (postgresEngine) run(ctx context.Context, db database, query string, limits Limits) (*Result, error) {
-	connConfig, serverHost, err := pgConnConfig(db)
+func (Engine) Run(ctx context.Context, db config.Database, query string, limits config.Limits) (*encoding.Result, error) {
+	connConfig, serverHost, err := connConfig(db)
 	if err != nil {
 		return nil, err
 	}
 
-	if db.ssh != nil {
+	if db.SSH != nil {
 		target := net.JoinHostPort(connConfig.Host, strconv.Itoa(int(connConfig.Port)))
-		localAddr, cleanup, tunnelErr := openTunnel(db.ssh, target)
+		localAddr, cleanup, tunnelErr := sshtunnel.Open(db.SSH, target)
 		if tunnelErr != nil {
 			return nil, tunnelErr
 		}
@@ -42,7 +48,7 @@ func (postgresEngine) run(ctx context.Context, db database, query string, limits
 		connConfig.Port = uint16(port)
 	}
 
-	tlsConfig, err := buildTLS(db.tls, serverHost)
+	tlsConfig, err := dbtls.BuildConfig(db.TLS, serverHost)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +89,7 @@ func (postgresEngine) run(ctx context.Context, db database, query string, limits
 		columns[i] = field.Name
 	}
 
-	accumulator := newRowAccumulator(columns, limits)
+	accumulator := encoding.NewAccumulator(columns, limits.MaxRows, limits.MaxBytes)
 	for rows.Next() {
 		values, valuesErr := rows.Values()
 		if valuesErr != nil {
@@ -91,14 +97,14 @@ func (postgresEngine) run(ctx context.Context, db database, query string, limits
 		}
 		row := make(map[string]any, len(columns))
 		for i, column := range columns {
-			normalized, keep, reason := normalizeValue(values[i])
+			normalized, keep, reason := encoding.NormalizeValue(values[i])
 			if !keep {
-				accumulator.omit(column, reason)
+				accumulator.Omit(column, reason)
 				continue
 			}
 			row[column] = normalized
 		}
-		keepReading, addErr := accumulator.add(row)
+		keepReading, addErr := accumulator.Add(row)
 		if addErr != nil {
 			return nil, addErr
 		}
@@ -106,37 +112,37 @@ func (postgresEngine) run(ctx context.Context, db database, query string, limits
 			break
 		}
 	}
-	if err := rows.Err(); err != nil && !accumulator.truncated {
+	if err := rows.Err(); err != nil && !accumulator.Truncated() {
 		return nil, fmt.Errorf("iterate rows: %w", err)
 	}
 
-	return accumulator.result(), nil
+	return accumulator.Result(), nil
 }
 
-// pgConnConfig builds a pgx config from either structured details or a
-// connection string, and returns the real server host for TLS/tunnel targeting.
-// pgx requires configs to come from ParseConfig, so details are rendered into a
-// URL first (which also keeps environment variables from leaking in).
-func pgConnConfig(db database) (*pgx.ConnConfig, string, error) {
-	if db.details != nil {
+// connConfig builds a pgx config from either structured details or a connection
+// string, and returns the real server host for TLS/tunnel targeting. pgx
+// requires configs to come from ParseConfig, so details are rendered into a URL
+// first (which also keeps environment variables from leaking in).
+func connConfig(db config.Database) (*pgx.ConnConfig, string, error) {
+	if db.Details != nil {
 		dsn := url.URL{
 			Scheme: "postgres",
-			Host:   net.JoinHostPort(db.details.host, strconv.Itoa(db.details.port)),
-			Path:   "/" + db.details.database,
+			Host:   net.JoinHostPort(db.Details.Host, strconv.Itoa(db.Details.Port)),
+			Path:   "/" + db.Details.Database,
 		}
-		if db.details.password != "" {
-			dsn.User = url.UserPassword(db.details.username, db.details.password)
+		if db.Details.Password != "" {
+			dsn.User = url.UserPassword(db.Details.Username, db.Details.Password)
 		} else {
-			dsn.User = url.User(db.details.username)
+			dsn.User = url.User(db.Details.Username)
 		}
 		config, err := pgx.ParseConfig(dsn.String())
 		if err != nil {
 			return nil, "", fmt.Errorf("build connection config: %w", err)
 		}
-		return config, db.details.host, nil
+		return config, db.Details.Host, nil
 	}
 
-	config, err := pgx.ParseConfig(db.connectionString)
+	config, err := pgx.ParseConfig(db.ConnectionString)
 	if err != nil {
 		return nil, "", fmt.Errorf("parse connection string: %w", err)
 	}

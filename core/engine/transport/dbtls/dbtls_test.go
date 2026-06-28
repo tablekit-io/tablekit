@@ -1,21 +1,23 @@
-package engine
+package dbtls
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"core/engine/config"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildTLSDisable(t *testing.T) {
-	out, err := buildTLS(&tlsSettings{mode: "disable"}, "db.example")
+func TestBuildConfigDisable(t *testing.T) {
+	out, err := BuildConfig(&config.TLSSettings{Mode: "disable"}, "db.example")
 	require.NoError(t, err)
 	assert.Nil(t, out)
 }
 
-func TestBuildTLSModes(t *testing.T) {
+func TestBuildConfigModes(t *testing.T) {
 	tests := []struct {
 		mode          string
 		skipVerify    bool
@@ -29,7 +31,7 @@ func TestBuildTLSModes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
-			out, err := buildTLS(&tlsSettings{mode: tt.mode}, "db.example")
+			out, err := BuildConfig(&config.TLSSettings{Mode: tt.mode}, "db.example")
 			require.NoError(t, err)
 			require.NotNil(t, out)
 			assert.Equal(t, "db.example", out.ServerName)
@@ -39,28 +41,28 @@ func TestBuildTLSModes(t *testing.T) {
 	}
 }
 
-func TestBuildTLSNilDefaultsToPrefer(t *testing.T) {
-	out, err := buildTLS(nil, "db.example")
+func TestBuildConfigNilDefaultsToPrefer(t *testing.T) {
+	out, err := BuildConfig(nil, "db.example")
 	require.NoError(t, err)
 	require.NotNil(t, out)
 	assert.True(t, out.InsecureSkipVerify)
 	assert.Equal(t, "db.example", out.ServerName)
 }
 
-func TestBuildTLSUnknownMode(t *testing.T) {
-	_, err := buildTLS(&tlsSettings{mode: "bogus"}, "db.example")
+func TestBuildConfigUnknownMode(t *testing.T) {
+	_, err := BuildConfig(&config.TLSSettings{Mode: "bogus"}, "db.example")
 	assert.Error(t, err)
 }
 
-func TestBuildTLSBadRootCert(t *testing.T) {
+func TestBuildConfigBadRootCert(t *testing.T) {
 	dir := t.TempDir()
 	bad := filepath.Join(dir, "ca.pem")
 	require.NoError(t, os.WriteFile(bad, []byte("not a certificate"), 0o600))
-	_, err := buildTLS(&tlsSettings{mode: "verify-full", rootCertFilePath: bad}, "db.example")
+	_, err := BuildConfig(&config.TLSSettings{Mode: "verify-full", RootCertFilePath: bad}, "db.example")
 	assert.Error(t, err)
 }
 
-func TestBuildTLSMissingRootCert(t *testing.T) {
-	_, err := buildTLS(&tlsSettings{mode: "verify-full", rootCertFilePath: "/no/such/ca.pem"}, "db.example")
+func TestBuildConfigMissingRootCert(t *testing.T) {
+	_, err := BuildConfig(&config.TLSSettings{Mode: "verify-full", RootCertFilePath: "/no/such/ca.pem"}, "db.example")
 	assert.Error(t, err)
 }
