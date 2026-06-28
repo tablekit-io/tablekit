@@ -1,9 +1,9 @@
 # TableKit
 
 Talk to your database from ChatGPT and Claude. TableKit is a small,
-self-hostable MCP server you point at your Postgres and MySQL databases — then
-ask questions in plain English and get back tables and interactive charts. Every
-query it runs is read-only, so the assistant can look but never touch.
+self-hostable MCP server you point at your Postgres, MySQL and MariaDB databases
+— then ask questions in plain English and get back tables and interactive charts.
+Every query it runs is read-only, so the assistant can look but never touch.
 
 You run it on your own infrastructure. Your connection strings and data stay
 with you; the only thing the assistant ever sees is the rows your read-only
@@ -24,21 +24,40 @@ queries return.
 
 ## Quickstart
 
-You'll need Docker. Point TableKit at one or more databases, give it the URL it
-will be reachable on, and bring it up:
+You'll need Docker. Declare your databases in a YAML file, give TableKit the URL
+it will be reachable on, and bring it up.
+
+Databases live in `databases.yaml` (by default `DATA_DIR/databases.yaml`; point
+elsewhere with `DATABASES_FILE`). Each entry is keyed by the name the assistant
+will use:
+
+```yaml
+# databases.yaml
+databases:
+  analytics:
+    type: postgres
+    details:
+      host: db-host
+      database: analytics
+      username: readonly
+      password: { from: env, env: ANALYTICS_PW }   # or a literal string
+  billing:
+    type: mysql        # or: mariadb
+    connectionString: mysql://readonly:pw@db-host:3306/billing
+```
 
 ```bash
 # .env
 PUBLIC_BASE_URL=https://tablekit.your-host.com
-
-# one entry per database — the part after TABLEKIT_DB_ is its name
-TABLEKIT_DB_ANALYTICS=postgres://readonly:pw@db-host:5432/analytics
-TABLEKIT_DB_BILLING=mysql://readonly:pw@db-host:3306/billing
+ANALYTICS_PW=...        # any secrets your databases.yaml reads via { from: env }
 ```
 
 ```bash
 docker compose up --build
 ```
+
+See [Databases](#databases) below for the full set of fields (TLS, SSH tunnels,
+secret sources).
 
 Check it's alive:
 
@@ -72,16 +91,54 @@ re-pairing after a reinstall, open up pairing again with the CLI below.
 
 Everything is set through the environment.
 
-| Variable            | Default                  | What it's for                                   |
-|---------------------|--------------------------|-------------------------------------------------|
-| `TABLEKIT_DB_<NAME>`| —                        | A database connection. Repeat it, one per DB.   |
-| `PUBLIC_BASE_URL`   | `http://localhost:8080`  | The URL clients reach TableKit on.              |
-| `APP_PORT`          | `8080`                   | MCP + OAuth listener.                           |
-| `CONTROL_PORT`      | `8081`                   | Health and ops listener.                        |
-| `DATA_DIR`          | `./data`                 | Where pairing + token state is kept.            |
-| `SIGNING_KEY`       | generated                | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
-| `ACCESS_TTL`        | `15m`                    | Access token lifetime.                          |
-| `REFRESH_TTL`       | `168h`                   | Refresh token lifetime.                         |
+| Variable          | Default                    | What it's for                                   |
+|-------------------|----------------------------|-------------------------------------------------|
+| `DATABASES_FILE`  | `DATA_DIR/databases.yaml`  | The YAML file declaring your databases (see below). A missing file just means no databases. |
+| `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
+| `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
+| `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |
+| `DATA_DIR`        | `./data`                   | Where pairing + token state is kept.            |
+| `SIGNING_KEY`     | generated                  | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
+| `ACCESS_TTL`      | `15m`                      | Access token lifetime.                          |
+| `REFRESH_TTL`     | `168h`                     | Refresh token lifetime.                         |
+
+### Databases
+
+Databases are declared in `databases.yaml` as a map keyed by the name the
+assistant uses with `run_sql` / `list_databases`. Each entry sets a `type`
+(`postgres`, `mysql`, or `mariadb`) and connects either with structured
+`details` **or** a single `connectionString` — not both:
+
+```yaml
+databases:
+  primary:
+    type: postgres
+    details:
+      host: db.internal      # the DB address as seen from TableKit (or from the SSH host, if tunneling)
+      port: 5432             # optional; per-engine default (pg 5432, mysql/mariadb 3306)
+      database: app
+      username: app_ro
+      password: { from: env, env: PRIMARY_PW }
+    tls:
+      mode: verify-full      # disable | allow | prefer (default) | require | verify-ca | verify-full
+      rootCertFilePath: /etc/ssl/db-ca.pem
+  reporting:
+    type: postgres
+    connectionString: postgres://reader@warehouse.internal:5432/reporting
+  legacy:
+    type: mariadb
+    details: { host: 10.0.0.5, username: reader }
+    ssh:                     # optional: reach the DB through a bastion/jump host
+      host: bastion.example.com
+      username: deploy
+      sshKeyFilePath: /keys/id_ed25519
+```
+
+Secrets (`password`, the SSH key `passphrase`) accept a bare string, or an
+object: `{ from: env, env: VAR }`, `{ from: file, path: /run/secrets/x }`, or
+`{ from: literal, value: ... }`. Every connection opens on its own, through its
+own SSH tunnel and TLS settings when configured. The full field reference is the
+JSON Schema at `core/engine/config/schemas/databases.schema.json`.
 
 ## How it works
 
@@ -93,11 +150,14 @@ the public internet.
 The MCP side speaks Streamable HTTP. Auth is plain OAuth 2.1: clients register
 themselves dynamically and use PKCE, so there are no secrets to manage by hand.
 Access is gated by pairing rather than a user database, which suits a server
-that's yours alone. State — the paired client, token chains, and the signing key
-— lives as JSON files under `DATA_DIR`, generated on first boot and gitignored.
+that's yours alone. State — registered clients and pairing, refresh-token chains
+and CLI bearer tokens, plus the signing key — lives as JSON files under
+`DATA_DIR`, generated on first boot and gitignored.
 
-Read-only is enforced where it counts: TableKit will not emit anything but
-`SELECT`, and it won't run DDL or DML on your behalf.
+Each query runs on its own connection, reaching the database directly or through
+a per-database SSH tunnel and/or TLS when configured. Read-only is enforced where
+it counts: every query runs inside a read-only transaction, so TableKit won't run
+writes or DDL on your behalf.
 
 ## Pairing
 
@@ -110,6 +170,17 @@ tablekit pairing disable                # turn new pairings off
 Use `--once` for the normal case: open the door for one client, and it closes
 behind them. `--indefinitely` is handy while you're wiring things up or want both
 ChatGPT and Claude attached. Already-paired clients keep working regardless.
+
+For a headless or scripted client that can't do the OAuth dance, mint a
+long-lived bearer token instead:
+
+```bash
+tablekit pairing token:generate          # prints a tablekit_pat_… token and its id
+tablekit pairing token:revoke <id OR token>
+```
+
+The client then presents it as `Authorization: Bearer <token>` to `/mcp`, no
+pairing or OAuth flow needed. Revoke it any time by id or by the token itself.
 
 ## Development
 
@@ -152,7 +223,7 @@ publishing:
 
 ```bash
 # what the suite does, roughly:
-docker run -d --network tablekit --name testdb-<rand> -e POSTGRES_PASSWORD=pw postgres:16
+docker run -d --network tablekit --name testdb-<rand> -e POSTGRES_PASSWORD=pw postgres:17
 # … core connects to  testdb-<rand>:5432  …
 docker rm -f testdb-<rand>
 ```
@@ -186,18 +257,26 @@ mapping in `docker-compose.yml` makes that name resolve on Linux too).
 
 ```
 core/
-├── cli/                # tablekit CLI — serve, pairing
-├── mcp/                # the MCP server
+├── cli/                # tablekit CLI — serve, pairing (incl. bearer tokens)
+├── engine/             # read-only SQL engine — consumers only touch Service
+│   ├── config/         # databases.yaml loading, validation, secret resolution
+│   ├── driver/         # per-engine impls — postgres, mysql (also mariadb)
+│   ├── transport/      # connection mechanics — sshtunnel, dbtls
+│   └── encoding/       # row normalization + result shaping
+├── mcp/                # the MCP server (wired to the engine)
 │   ├── handlers/       # the tools — one per file
-│   └── ui/             # embedded MCP Apps widget builds (dist)
-├── services/           # shared dependencies
+│   └── ui/             # embedded MCP Apps widget builds (widgets/)
+├── services/           # shared dependencies bundle
 │   ├── config/         # environment config
-│   ├── store/          # JSON state (connections, pairing, tokens, signing key)
-│   └── services.go     # the Services bundle (config + store)
+│   ├── store/          # JSON state (clients, pairing, tokens, signing key)
+│   ├── oauth/          # OAuth 2.1 issuer — JWT, PKCE, bearer minting
+│   └── services.go     # the Services bundle (config + store + engine + issuer)
 └── http/               # the two Gin listeners
     ├── app/            # public engine
-    │   ├── oauth/      # OAuth 2.1 — register, authorize, token, metadata
+    │   ├── oauth/      # OAuth 2.1 handlers — register, authorize, token, metadata
+    │   │   └── templates/  # embedded HTML (already-paired page)
     │   └── mcp.go      # mounts the MCP server on /mcp behind the bearer guard
+    ├── commons/        # shared HTTP bits — the welcome page
     └── control/        # control engine — root, health
 ```
 

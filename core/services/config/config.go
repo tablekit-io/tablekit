@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// Config holds all runtime knobs. It is built once at startup and passed
-// (by pointer) into the OAuth and MCP layers — a minimal stand-in for the
-// dbctx "services" dependency-injection container.
+// Config holds all runtime knobs. It is built once at startup and bundled into
+// the Services value (alongside the store, engine and issuer), which is threaded
+// through the OAuth and MCP layers.
 type Config struct {
 	// AppPort serves MCP (/mcp) and OAuth (/oauth/*, /register, /.well-known/*).
 	AppPort string

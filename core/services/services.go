@@ -1,7 +1,7 @@
-// Package services bundles the long-lived, process-wide dependencies (config
-// and persistence) into one value constructed at startup and threaded through
-// the app. It is the single place those services are wired, and the extension
-// point for any future ones.
+// Package services bundles the long-lived, process-wide dependencies — config,
+// persistence (store), the read-only query engine, and the JWT issuer — into one
+// value constructed at startup and threaded through the app. It is the single
+// place those services are wired, and the extension point for any future ones.
 package services
 
 import (
