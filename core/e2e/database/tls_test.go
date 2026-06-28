@@ -1,4 +1,4 @@
-package e2e
+package database
 
 import (
 	"crypto/ecdsa"
@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"core/e2e/harness"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,9 +89,9 @@ func writeTLSYaml(t *testing.T, engine, host string, port int, database, usernam
 // over the verify-full connection.
 func runTLSSimpleQuery(t *testing.T, configPath string) {
 	t.Helper()
-	server := startServerEnv(t, "DATABASES_FILE="+configPath)
-	_, token := generateToken(t, server)
-	session, err := connect(t, server.appURL, bearerClient(token))
+	server := harness.StartServerEnv(t, "DATABASES_FILE="+configPath)
+	_, token := harness.GenerateToken(t, server)
+	session, err := harness.Connect(t, server.AppURL, harness.BearerClient(token))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
 
@@ -101,26 +103,26 @@ func runTLSSimpleQuery(t *testing.T, configPath string) {
 
 // TestTLSPostgres: run_sql reaches a TLS-only postgres with verify-full.
 func TestTLSPostgres(t *testing.T) {
-	requireDocker(t)
-	ensureImage(t, "tablekit-e2e-pgtls:latest", filepath.Join(e2eDir(t), "containers", "pgtls"))
+	harness.RequireDocker(t)
+	harness.EnsureImage(t, "tablekit-e2e-pgtls:latest", filepath.Join(dbDir(), "containers", "pgtls"))
 
-	name := uniqueName("pgtls")
+	name := harness.UniqueName("pgtls")
 	caPEM, certPEM, keyPEM := genServerCert(t, name)
 
-	runContainer(t, containerSpec{
-		name:  name,
-		image: "tablekit-e2e-pgtls:latest",
-		env: []string{
+	harness.RunContainer(t, harness.ContainerSpec{
+		Name:  name,
+		Image: "tablekit-e2e-pgtls:latest",
+		Env: []string{
 			"POSTGRES_PASSWORD=pw",
 			"POSTGRES_DB=app",
 			"TLS_CERT=" + base64.StdEncoding.EncodeToString(certPEM),
 			"TLS_KEY=" + base64.StdEncoding.EncodeToString(keyPEM),
 		},
-		tmpfs: []string{"/var/lib/postgresql/data"},
+		Tmpfs: []string{"/var/lib/postgresql/data"},
 	})
 	// psql (not pg_isready) so we only proceed once the real TLS server is up
 	// with the target db (pg_isready reports ready during the init temp server).
-	waitContainerReady(t, name, 60*time.Second, "psql", "-U", "postgres", "-d", "app", "-c", "SELECT 1")
+	harness.WaitContainerReady(t, name, 60*time.Second, "psql", "-U", "postgres", "-d", "app", "-c", "SELECT 1")
 
 	caPath := filepath.Join(t.TempDir(), "ca.pem")
 	require.NoError(t, os.WriteFile(caPath, caPEM, 0o600))
@@ -130,24 +132,28 @@ func TestTLSPostgres(t *testing.T) {
 
 // TestTLSMySQL: run_sql reaches a TLS-required mysql with verify-full.
 func TestTLSMySQL(t *testing.T) {
-	requireDocker(t)
-	ensureImage(t, "tablekit-e2e-mysqltls:latest", filepath.Join(e2eDir(t), "containers", "mysqltls"))
+	harness.RequireDocker(t)
+	harness.EnsureImage(t, "tablekit-e2e-mysqltls:latest", filepath.Join(dbDir(), "containers", "mysqltls"))
 
-	name := uniqueName("mytls")
+	name := harness.UniqueName("mytls")
 	caPEM, certPEM, keyPEM := genServerCert(t, name)
 
-	runContainer(t, containerSpec{
-		name:  name,
-		image: "tablekit-e2e-mysqltls:latest",
-		env: []string{
+	harness.RunContainer(t, harness.ContainerSpec{
+		Name:  name,
+		Image: "tablekit-e2e-mysqltls:latest",
+		Env: []string{
 			"MYSQL_ROOT_PASSWORD=pw",
 			"MYSQL_DATABASE=app",
 			"TLS_CERT=" + base64.StdEncoding.EncodeToString(certPEM),
 			"TLS_KEY=" + base64.StdEncoding.EncodeToString(keyPEM),
 		},
-		tmpfs: []string{"/var/lib/mysql"},
+		Tmpfs: []string{"/var/lib/mysql"},
 	})
-	waitContainerReady(t, name, 90*time.Second, "mysql", "-uroot", "-ppw", "-e", "SELECT 1")
+	// Probe over TCP with TLS required, not the local socket: under load the
+	// socket accepts connections before mysqld is serving TLS over TCP, which is
+	// what the engine actually connects on.
+	harness.WaitContainerReady(t, name, 90*time.Second,
+		"mysql", "-uroot", "-ppw", "-h", "127.0.0.1", "--ssl-mode=REQUIRED", "-e", "SELECT 1")
 
 	caPath := filepath.Join(t.TempDir(), "ca.pem")
 	require.NoError(t, os.WriteFile(caPath, caPEM, 0o600))

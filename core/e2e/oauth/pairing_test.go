@@ -1,9 +1,11 @@
-package e2e
+package oauth
 
 import (
 	"io"
 	"net/http"
 	"testing"
+
+	"core/e2e/harness"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,25 +15,25 @@ import (
 // or is turned away with the "already paired" page.
 func pairs(t *testing.T, appURL string) bool {
 	t.Helper()
-	clientID := register(t, appURL)
-	_, challenge := pkcePair(t)
-	response := authorize(t, appURL, clientID, challenge, "")
+	clientID := harness.Register(t, appURL)
+	_, challenge := harness.PKCEPair(t)
+	response := harness.Authorize(t, appURL, clientID, challenge, "")
 	defer response.Body.Close()
 	return response.StatusCode == http.StatusFound &&
 		response.Header.Get("Location") != ""
 }
 
 func TestPairingDefaultOnce(t *testing.T) {
-	server := startServer(t)
+	server := harness.StartServer(t)
 
 	// First client pairs.
-	assert.True(t, pairs(t, server.appURL))
+	assert.True(t, pairs(t, server.AppURL))
 
 	// Second (different) client is refused with the already-paired page that
 	// bounces back to the client with an OAuth error.
-	clientID := register(t, server.appURL)
-	_, challenge := pkcePair(t)
-	response := authorize(t, server.appURL, clientID, challenge, "")
+	clientID := harness.Register(t, server.AppURL)
+	_, challenge := harness.PKCEPair(t)
+	response := harness.Authorize(t, server.AppURL, clientID, challenge, "")
 	defer response.Body.Close()
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 	html, _ := io.ReadAll(response.Body)
@@ -40,31 +42,31 @@ func TestPairingDefaultOnce(t *testing.T) {
 }
 
 func TestPairingEnableIndefinitely(t *testing.T) {
-	server := startServer(t)
-	runCLI(t, server.dataDir, "pairing", "enable", "--indefinitely")
+	server := harness.StartServer(t)
+	harness.RunCLI(t, server.DataDir, "pairing", "enable", "--indefinitely")
 
 	// Multiple distinct clients can now pair.
-	assert.True(t, pairs(t, server.appURL))
-	assert.True(t, pairs(t, server.appURL))
+	assert.True(t, pairs(t, server.AppURL))
+	assert.True(t, pairs(t, server.AppURL))
 }
 
 func TestPairingDisable(t *testing.T) {
-	server := startServer(t)
+	server := harness.StartServer(t)
 
 	// Pair one client while in the default "once" mode.
-	clientID := register(t, server.appURL)
-	verifier, challenge := pkcePair(t)
-	code := authorizeCode(t, server.appURL, clientID, challenge)
-	exchangeCode(t, server.appURL, clientID, code, verifier)
+	clientID := harness.Register(t, server.AppURL)
+	verifier, challenge := harness.PKCEPair(t)
+	code := harness.AuthorizeCode(t, server.AppURL, clientID, challenge)
+	harness.ExchangeCode(t, server.AppURL, clientID, code, verifier)
 
-	runCLI(t, server.dataDir, "pairing", "disable")
+	harness.RunCLI(t, server.DataDir, "pairing", "disable")
 
 	// A new client is blocked...
-	assert.False(t, pairs(t, server.appURL))
+	assert.False(t, pairs(t, server.AppURL))
 
 	// ...but the already-paired client is still admitted (re-authorize).
-	_, challenge2 := pkcePair(t)
-	response := authorize(t, server.appURL, clientID, challenge2, "")
+	_, challenge2 := harness.PKCEPair(t)
+	response := harness.Authorize(t, server.AppURL, clientID, challenge2, "")
 	defer response.Body.Close()
 	require.Equal(t, http.StatusFound, response.StatusCode)
 }

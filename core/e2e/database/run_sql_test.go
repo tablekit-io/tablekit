@@ -1,22 +1,19 @@
-package e2e
+package database
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"core/e2e/harness"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 // runSQLResult mirrors the run_sql tool's structured output for decoding.
@@ -48,74 +45,6 @@ func callRunSQL(t *testing.T, session *mcp.ClientSession, database, query string
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &decoded))
 	return decoded, false
-}
-
-// generateSSHKey returns an authorized_keys line (public) and an OpenSSH PEM
-// private key for an ephemeral ed25519 pair.
-func generateSSHKey(t *testing.T) (authorizedKey string, privatePEM []byte) {
-	t.Helper()
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	sshPub, err := ssh.NewPublicKey(pub)
-	require.NoError(t, err)
-	authorizedKey = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub)))
-	block, err := ssh.MarshalPrivateKey(priv, "")
-	require.NoError(t, err)
-	return authorizedKey, pem.EncodeToMemory(block)
-}
-
-// startBastion builds (once) and starts the SSH bastion with the given public key.
-func startBastion(t *testing.T, authorizedKey string) string {
-	t.Helper()
-	ensureImage(t, "tablekit-e2e-bastion:latest", filepath.Join(e2eDir(t), "containers", "bastion"))
-	name := runContainer(t, containerSpec{
-		name:  uniqueName("bastion"),
-		image: "tablekit-e2e-bastion:latest",
-		env:   []string{"AUTHORIZED_KEY=" + authorizedKey},
-	})
-	waitContainerReady(t, name, 30*time.Second, "sh", "-c", "[ -f /etc/ssh/ssh_host_ed25519_key ]")
-	// Give sshd a beat to bind after host keys are generated.
-	time.Sleep(500 * time.Millisecond)
-	return name
-}
-
-// startPostgres starts a tmpfs-backed postgres:17 seeded with emerald.sql and
-// returns the container name (its DNS name on the shared network).
-func startPostgres(t *testing.T) string {
-	t.Helper()
-	name := runContainer(t, containerSpec{
-		name:  uniqueName("pg"),
-		image: "postgres:17",
-		env:   []string{"POSTGRES_PASSWORD=pw", "POSTGRES_DB=emerald"},
-		tmpfs: []string{"/var/lib/postgresql/data"},
-	})
-	// psql (not pg_isready) as the probe: pg_isready reports ready during the
-	// image's temporary init server, before POSTGRES_DB exists and the real TCP
-	// server is up. A successful query against the target db means truly ready.
-	waitContainerReady(t, name, 60*time.Second, "psql", "-U", "postgres", "-d", "emerald", "-c", "SELECT 1")
-	seed, err := os.Open(filepath.Join(e2eDir(t), "test-data", "emerald.sql"))
-	require.NoError(t, err)
-	defer seed.Close()
-	dockerExecStdin(t, name, seed, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "emerald")
-	return name
-}
-
-// startMySQL starts a tmpfs-backed mysql:8.4 seeded with dira.sql (which creates
-// its own database dbctx_test_dira) and returns the container name.
-func startMySQL(t *testing.T) string {
-	t.Helper()
-	name := runContainer(t, containerSpec{
-		name:  uniqueName("my"),
-		image: "mysql:8.4",
-		env:   []string{"MYSQL_ROOT_PASSWORD=pw"},
-		tmpfs: []string{"/var/lib/mysql"},
-	})
-	waitContainerReady(t, name, 90*time.Second, "mysql", "-uroot", "-ppw", "-e", "SELECT 1")
-	seed, err := os.Open(filepath.Join(e2eDir(t), "test-data", "dira.sql"))
-	require.NoError(t, err)
-	defer seed.Close()
-	dockerExecStdin(t, name, seed, "sh", "-c", "exec mysql -uroot -ppw")
-	return name
 }
 
 // dbCase parameterizes the engine under test.
@@ -171,9 +100,9 @@ func writeDatabasesYAML(t *testing.T, c dbCase, dbHost, sshBlock string) string 
 // runMatrix exercises run_sql/list_databases against a started server.
 func runMatrix(t *testing.T, c dbCase, configPath string) {
 	t.Helper()
-	server := startServerEnv(t, "DATABASES_FILE="+configPath)
-	_, token := generateToken(t, server)
-	session, err := connect(t, server.appURL, bearerClient(token))
+	server := harness.StartServerEnv(t, "DATABASES_FILE="+configPath)
+	_, token := harness.GenerateToken(t, server)
+	session, err := harness.Connect(t, server.AppURL, harness.BearerClient(token))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
 
@@ -222,7 +151,7 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 
 // TestDatabasesDirect: run_sql against postgres and mysql over a direct connection.
 func TestDatabasesDirect(t *testing.T) {
-	requireDocker(t)
+	harness.RequireDocker(t)
 	for _, c := range dbCases() {
 		t.Run(c.engine, func(t *testing.T) {
 			t.Parallel()
@@ -235,7 +164,7 @@ func TestDatabasesDirect(t *testing.T) {
 
 // TestDatabasesOverSSH: run_sql against postgres and mysql through the SSH bastion.
 func TestDatabasesOverSSH(t *testing.T) {
-	requireDocker(t)
+	harness.RequireDocker(t)
 	for _, c := range dbCases() {
 		t.Run(c.engine, func(t *testing.T) {
 			t.Parallel()
