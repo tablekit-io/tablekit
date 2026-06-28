@@ -18,7 +18,7 @@ type listDatabasesOutput struct {
 	Databases []engine.DatabaseInfo `json:"databases" jsonschema:"the configured databases, each with its name and engine type"`
 }
 
-// listDatabases returns the databases available to run_sql. It never exposes
+// listDatabases returns the databases available to run_query. It never exposes
 // hosts, credentials or any connection detail.
 func (h *Handlers) listDatabases(_ context.Context, _ *mcp.CallToolRequest, _ listDatabasesInput) (*mcp.CallToolResult, listDatabasesOutput, error) {
 	databases := h.Engine.List()
@@ -33,7 +33,7 @@ func (h *Handlers) listDatabases(_ context.Context, _ *mcp.CallToolRequest, _ li
 func (h *Handlers) registerListDatabases(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_databases",
-		Description: "Lists the databases available to run_sql, each with its name and engine type (postgres/mysql/mariadb). Returns no credentials or connection details.",
+		Description: "Lists the databases available to run_query, each with its name and engine type (postgres/mysql/mariadb). Returns no credentials or connection details.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			IdempotentHint:  true,

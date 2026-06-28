@@ -105,7 +105,7 @@ Everything is set through the environment.
 ### Databases
 
 Databases are declared in `databases.yaml` as a map keyed by the name the
-assistant uses with `run_sql` / `list_databases`. Each entry sets a `type`
+assistant uses with `run_query` / `list_databases`. Each entry sets a `type`
 (`postgres`, `mysql`, or `mariadb`) and connects either with structured
 `details` **or** a single `connectionString` — not both:
 
@@ -194,7 +194,7 @@ go test ./...        # unit + e2e suite (DB container tests skip without Docker)
 go test -race ./...  # the pairing path is concurrency-sensitive
 ```
 
-The database e2e tests (`run_sql` against real Postgres/MySQL, including over an
+The database e2e tests (`run_query` against real Postgres/MySQL, including over an
 SSH tunnel and TLS) need Docker and the shared `tablekit` network, which exist
 inside the `core` container — so run them through Compose:
 

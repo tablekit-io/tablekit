@@ -95,13 +95,13 @@ func runTLSSimpleQuery(t *testing.T, configPath string) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
 
-	result, isErr := callRunSQL(t, session, "target", "SELECT 1 AS one")
+	result, isErr := callRunQuery(t, session, "target", "SELECT 1 AS one")
 	require.False(t, isErr, "simple query over TLS should succeed")
 	require.Equal(t, 1, result.RowCount)
-	assert.Contains(t, result.Columns, "one")
+	assert.Contains(t, result.columnNames(), "one")
 }
 
-// TestTLSPostgres: run_sql reaches a TLS-only postgres with verify-full.
+// TestTLSPostgres: run_query reaches a TLS-only postgres with verify-full.
 func TestTLSPostgres(t *testing.T) {
 	harness.RequireDocker(t)
 	harness.EnsureImage(t, "tablekit-e2e-pgtls:latest", filepath.Join(dbDir(), "containers", "pgtls"))
@@ -130,7 +130,7 @@ func TestTLSPostgres(t *testing.T) {
 	runTLSSimpleQuery(t, configPath)
 }
 
-// TestTLSMySQL: run_sql reaches a TLS-required mysql with verify-full.
+// TestTLSMySQL: run_query reaches a TLS-required mysql with verify-full.
 func TestTLSMySQL(t *testing.T) {
 	harness.RequireDocker(t)
 	harness.EnsureImage(t, "tablekit-e2e-mysqltls:latest", filepath.Join(dbDir(), "containers", "mysqltls"))

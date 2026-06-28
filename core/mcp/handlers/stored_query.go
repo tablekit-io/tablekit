@@ -39,7 +39,7 @@ func chartRenderResult(tool, label string) (*mcp.CallToolResult, chartRenderOutp
 }
 
 // Chart/export sizing: the render and export paths fetch the whole result, so
-// they raise the row and byte caps well above the run_sql/run_query page size.
+// they raise the row and byte caps well above the run_query page size.
 const (
 	chartMaxRows  = 100_000
 	chartMaxBytes = 16 << 20 // 16 MiB

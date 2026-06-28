@@ -38,7 +38,6 @@ func New(engineService *engine.Service, queriesRepo *queries.Repository, issuer 
 // Register wires every tool and the built widget UI resources onto s.
 func (h *Handlers) Register(s *mcp.Server) {
 	h.registerListDatabases(s)
-	h.registerRunSQL(s)
 	h.registerRunQuery(s)
 	h.registerRetrieveResults(s)
 	h.registerFetchChartData(s)

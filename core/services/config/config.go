@@ -23,7 +23,7 @@ type Config struct {
 	PublicBaseURL string
 	// DataDir holds the gitignored JSON state (clients, tokens, signing key).
 	DataDir string
-	// DatabasesFile is the YAML file declaring the databases run_sql can query.
+	// DatabasesFile is the YAML file declaring the databases run_query can query.
 	// Defaults to DATA_DIR/databases.yaml; a missing file means no databases.
 	DatabasesFile string
 	// SigningKey, if set, is a base64-encoded HS256 secret supplied externally;

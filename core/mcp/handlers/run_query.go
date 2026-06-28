@@ -43,8 +43,8 @@ type runQueryOutput struct {
 
 // runQuery executes read-only SQL, stores the query descriptor, and returns a
 // result_key the agent passes to retrieve_results / render_*_chart / get_export_url.
-// Unlike run_sql it persists nothing but the query text (not the rows): the other
-// tools re-run the stored SQL against the live database.
+// It persists nothing but the query text (not the rows): the other tools re-run
+// the stored SQL against the live database.
 func (h *Handlers) runQuery(ctx context.Context, _ *mcp.CallToolRequest, in runQueryInput) (*mcp.CallToolResult, runQueryOutput, error) {
 	if in.Description == "" {
 		return nil, runQueryOutput{}, fmt.Errorf("description is required")

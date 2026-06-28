@@ -16,31 +16,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// runSQLResult mirrors the run_sql tool's structured output for decoding.
-type runSQLResult struct {
-	Columns   []string         `json:"columns"`
-	Rows      []map[string]any `json:"rows"`
-	RowCount  int              `json:"row_count"`
-	Truncated bool             `json:"truncated"`
+// runQueryResult mirrors the run_query tool's structured output for decoding.
+// Rows are present because callRunQuery sets include_results.
+type runQueryResult struct {
+	ResultKey string `json:"result_key"`
+	Columns   []struct {
+		Name string `json:"name"`
+	} `json:"columns"`
+	Rows     []map[string]any `json:"rows"`
+	RowCount int              `json:"row_count"`
+	HasMore  bool             `json:"has_more"`
 }
 
-// callRunSQL invokes run_sql and returns the decoded result, plus whether the
-// call was an error (transport error or tool IsError).
-func callRunSQL(t *testing.T, session *mcp.ClientSession, database, query string) (runSQLResult, bool) {
+// columnNames extracts the column names from a run_query result.
+func (r runQueryResult) columnNames() []string {
+	names := make([]string, len(r.Columns))
+	for i, c := range r.Columns {
+		names[i] = c.Name
+	}
+	return names
+}
+
+// callRunQuery invokes run_query (with the first page of rows inlined) and
+// returns the decoded result, plus whether the call was an error (transport
+// error or tool IsError).
+func callRunQuery(t *testing.T, session *mcp.ClientSession, database, query string) (runQueryResult, bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "run_sql",
-		Arguments: map[string]any{"database": database, "sql": query},
+		Name: "run_query",
+		Arguments: map[string]any{
+			"database":        database,
+			"sql":             query,
+			"description":     "e2e test query",
+			"include_results": true,
+		},
 	})
 	if err != nil {
-		return runSQLResult{}, true
+		return runQueryResult{}, true
 	}
 	if result.IsError {
-		return runSQLResult{}, true
+		return runQueryResult{}, true
 	}
-	var decoded runSQLResult
+	var decoded runQueryResult
 	raw, err := json.Marshal(result.StructuredContent)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &decoded))
@@ -97,7 +116,7 @@ func writeDatabasesYAML(t *testing.T, c dbCase, dbHost, sshBlock string) string 
 	return path
 }
 
-// runMatrix exercises run_sql/list_databases against a started server.
+// runMatrix exercises run_query/list_databases against a started server.
 func runMatrix(t *testing.T, c dbCase, configPath string) {
 	t.Helper()
 	server := harness.StartServerEnv(t, "DATABASES_FILE="+configPath)
@@ -119,13 +138,13 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 	assert.Equal(t, c.engine, first["type"])
 
 	// Seeded SELECT correctness: a real table is queryable.
-	count, isErr := callRunSQL(t, session, "target", "SELECT count(*) AS n FROM "+c.seededTable)
+	count, isErr := callRunQuery(t, session, "target", "SELECT count(*) AS n FROM "+c.seededTable)
 	require.False(t, isErr, "count query on %s should succeed", c.seededTable)
 	require.Equal(t, 1, count.RowCount)
-	assert.Contains(t, count.Columns, "n")
+	assert.Contains(t, count.columnNames(), "n")
 
 	// Typed literal round-trip: columns + values arrive intact.
-	lit, isErr := callRunSQL(t, session, "target", "SELECT 7 AS answer, 'tablekit' AS name")
+	lit, isErr := callRunQuery(t, session, "target", "SELECT 7 AS answer, 'tablekit' AS name")
 	require.False(t, isErr)
 	require.Len(t, lit.Rows, 1)
 	assert.Equal(t, "tablekit", lit.Rows[0]["name"])
@@ -135,21 +154,22 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 	// before row evaluation. DDL is not used here: MySQL DDL implicitly commits,
 	// so it sidesteps the transaction — only DML is reliably blocked.)
 	writeQuery := "INSERT INTO " + c.seededTable + " SELECT * FROM " + c.seededTable
-	_, isErr = callRunSQL(t, session, "target", writeQuery)
+	_, isErr = callRunQuery(t, session, "target", writeQuery)
 	assert.True(t, isErr, "DML write must be rejected by the read-only transaction")
 
-	// Truncation: a result larger than the row cap is cut to 2048.
-	trunc, isErr := callRunSQL(t, session, "target", c.truncateQuery)
+	// Paging: a result larger than the first page is capped to default_limit
+	// (128) with has_more set, rather than returned whole.
+	trunc, isErr := callRunQuery(t, session, "target", c.truncateQuery)
 	require.False(t, isErr)
-	assert.True(t, trunc.Truncated)
-	assert.Equal(t, 2048, trunc.RowCount)
+	assert.True(t, trunc.HasMore)
+	assert.Equal(t, 128, trunc.RowCount)
 
 	// Unknown database name returns a clean error.
-	_, isErr = callRunSQL(t, session, "does-not-exist", "SELECT 1")
+	_, isErr = callRunQuery(t, session, "does-not-exist", "SELECT 1")
 	assert.True(t, isErr, "unknown database must error")
 }
 
-// TestDatabasesDirect: run_sql against postgres and mysql over a direct connection.
+// TestDatabasesDirect: run_query against postgres and mysql over a direct connection.
 func TestDatabasesDirect(t *testing.T) {
 	harness.RequireDocker(t)
 	for _, c := range dbCases() {
@@ -162,7 +182,7 @@ func TestDatabasesDirect(t *testing.T) {
 	}
 }
 
-// TestDatabasesOverSSH: run_sql against postgres and mysql through the SSH bastion.
+// TestDatabasesOverSSH: run_query against postgres and mysql through the SSH bastion.
 func TestDatabasesOverSSH(t *testing.T) {
 	harness.RequireDocker(t)
 	for _, c := range dbCases() {
