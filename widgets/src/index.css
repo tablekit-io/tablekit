@@ -121,8 +121,16 @@
   * {
     @apply border-border outline-ring/50;
     }
+  /* The widget renders inside a host chat (Claude/ChatGPT) whose surface is
+     neither pure white nor black. Keep the page itself transparent so the host
+     background shows through; only the Card paints a panel. */
+  html,
+  body,
+  #root {
+    background: transparent;
+    }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     }
   html {
     @apply font-sans;
