@@ -99,6 +99,35 @@ func TestInteractiveToolsRegistered(t *testing.T) {
 	}
 }
 
+func TestStoredQueryToolsRegistered(t *testing.T) {
+	clientSession := connectInMemory(t)
+	tools := toolsByName(t, clientSession)
+
+	for _, name := range []string{
+		"run_query", "retrieve_results", "fetch_chart_data",
+		"render_cartesian_series_chart", "render_proportional_chart", "get_export_url",
+	} {
+		require.NotNil(t, tools[name], "tool %q should be registered", name)
+	}
+
+	// fetch_chart_data is app-only: it carries _meta.ui.visibility=['app'].
+	fetchUI := uiMeta(tools["fetch_chart_data"])
+	require.NotNil(t, fetchUI, "fetch_chart_data should carry _meta.ui")
+	assert.Equal(t, []any{"app"}, fetchUI["visibility"])
+
+	// Build-dependent: the render tools link the shared chart widget via
+	// _meta.ui.resourceUri only once @tablekit/widgets has been built into the
+	// embed dir.
+	if ui.WidgetURI("chart_renderer") != "" {
+		for _, name := range []string{"render_cartesian_series_chart", "render_proportional_chart"} {
+			meta := uiMeta(tools[name])
+			require.NotNil(t, meta, "built %q should carry _meta.ui", name)
+			uri, _ := meta["resourceUri"].(string)
+			assert.Contains(t, uri, "ui://tablekit/chart_renderer-")
+		}
+	}
+}
+
 func TestWidgetResourceIsServed(t *testing.T) {
 	// Only meaningful once the widget is built into the embed dir; a fresh
 	// checkout ships the placeholder manifest and serves no UI resources.

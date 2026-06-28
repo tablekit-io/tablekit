@@ -3,5 +3,10 @@
         "file": "hello_world_interactive-9e17d37ebaa3f7b8.html",
         "hash": "9e17d37ebaa3f7b8",
         "bytes": 231549
+    },
+    "chart_renderer": {
+        "file": "chart_renderer-4fdd1abe7ddd5ccf.html",
+        "hash": "4fdd1abe7ddd5ccf",
+        "bytes": 891631
     }
 }

@@ -1,23 +1,35 @@
 import {createHash} from 'node:crypto';
-import {readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join, relative, resolve} from 'node:path';
 import {defineConfig, type Plugin} from 'vite';
 import preact from '@preact/preset-vite';
+import tailwindcss from '@tailwindcss/vite';
 import {viteSingleFile} from 'vite-plugin-singlefile';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
 // One entry per MCP-app template. The key is the template name (also the
 // manifest key + output filename stem); the value is its HTML entry. Add a
-// template by dropping a folder under src/ and listing it here — nothing
-// else in the pipeline needs to change.
-const ENTRIES: Readonly<Record<string, string>> = {
+// template by dropping a folder under src/ and listing it here, then add the
+// name to build.mjs's ENTRIES list.
+const ALL_ENTRIES: Readonly<Record<string, string>> = {
     'hello_world_interactive': resolve(
         ROOT,
         'src/hello_world_interactive/index.html',
     ),
+    'chart_renderer': resolve(ROOT, 'src/chart_renderer/index.html'),
 };
+
+// viteSingleFile inlines everything into one chunk (codeSplitting:false), which
+// rollup rejects with multiple inputs. So each template is built in its own
+// single-input vite invocation, selected by WIDGET_ENTRY (see build.mjs); a
+// plain `vite build` with no selection builds the whole set in one chunk only if
+// there's a single template. The manifest is merged across invocations.
+const selected = process.env.WIDGET_ENTRY;
+const ENTRIES: Readonly<Record<string, string>> = selected
+    ? {[selected]: ALL_ENTRIES[selected]}
+    : ALL_ENTRIES;
 
 const MiB = 1024 * 1024;
 const WARN_BYTES = 16 * MiB;
@@ -25,10 +37,11 @@ const MAX_BYTES = 32 * MiB; // exactly 32 MiB — the host's ui:// transport cei
 
 // After viteSingleFile has inlined every asset into one HTML per entry, this
 // plugin finalises the build artifacts core consumes: it content-hashes each
-// HTML, renames it to `<name>-<hash>.html`, enforces the size budget, and
-// writes a manifest mapping template name -> {file, hash, bytes}. The hash is
-// the cache key core advertises (ui://tablekit/<name>-<hash>), so any content
-// change auto-busts the host's per-URI resource cache.
+// HTML, renames it to `<name>-<hash>.html`, enforces the size budget, and merges
+// the template into manifest.json (template name -> {file, hash, bytes}). The
+// hash is the cache key core advertises (ui://tablekit/<name>-<hash>), so any
+// content change auto-busts the host's per-URI resource cache. Merging (rather
+// than overwriting) lets each per-entry invocation contribute its own line.
 const singlefileManifest = (
     entries: Readonly<Record<string, string>>,
 ): Plugin => {
@@ -41,7 +54,15 @@ const singlefileManifest = (
             root = config.root;
         },
         closeBundle() {
-            const built = Object.entries(entries).map(([name, input]) => {
+            const manifestPath = join(outDir, 'manifest.json');
+            const manifest: Record<
+                string,
+                {file: string; hash: string; bytes: number}
+            > = existsSync(manifestPath)
+                ? JSON.parse(readFileSync(manifestPath, 'utf8'))
+                : {};
+
+            for (const [name, input] of Object.entries(entries)) {
                 // viteSingleFile emits the inlined HTML at the input's path
                 // relative to root, under outDir.
                 const emitted = join(outDir, relative(root, input));
@@ -63,13 +84,13 @@ const singlefileManifest = (
                 const file = `${name}-${hash}.html`;
                 writeFileSync(join(outDir, file), bytes);
                 rmSync(emitted);
-                return [name, {file, hash, bytes: bytes.length}] as const;
-            });
+                manifest[name] = {file, hash, bytes: bytes.length};
+            }
             // Drop the now-empty nested input dirs left under outDir.
             rmSync(join(outDir, 'src'), {recursive: true, force: true});
             writeFileSync(
-                join(outDir, 'manifest.json'),
-                JSON.stringify(Object.fromEntries(built), null, 4) + '\n',
+                manifestPath,
+                JSON.stringify(manifest, null, 4) + '\n',
             );
         },
     };
@@ -77,10 +98,27 @@ const singlefileManifest = (
 
 export default defineConfig({
     root: ROOT,
-    plugins: [preact(), viteSingleFile(), singlefileManifest(ENTRIES)],
+    plugins: [
+        tailwindcss(),
+        preact(),
+        viteSingleFile(),
+        singlefileManifest(ENTRIES),
+    ],
+    resolve: {
+        // shadcn/Base UI components are authored for React; alias to preact/compat
+        // so they run under Preact (the @ alias points at src for shadcn imports).
+        alias: {
+            'react': 'preact/compat',
+            'react-dom': 'preact/compat',
+            'react/jsx-runtime': 'preact/jsx-runtime',
+            '@': resolve(ROOT, 'src'),
+        },
+    },
     build: {
         outDir: resolve(ROOT, 'dist'),
-        emptyOutDir: true,
+        // build.mjs cleans dist once up front; per-entry invocations must not wipe
+        // each other's output (or the merged manifest).
+        emptyOutDir: false,
         rollupOptions: {input: ENTRIES},
     },
 });
