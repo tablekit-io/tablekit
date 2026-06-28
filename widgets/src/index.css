@@ -67,12 +67,12 @@
     --border: oklch(0.92 0.004 286.32);
     --input: oklch(0.92 0.004 286.32);
     --ring: oklch(0.705 0.015 286.067);
-    /* Shades-of-blue chart palette (light mode): light -> dark blue. */
-    --chart-1: oklch(0.72 0.13 255);
-    --chart-2: oklch(0.64 0.15 256);
-    --chart-3: oklch(0.56 0.16 257);
-    --chart-4: oklch(0.48 0.16 259);
-    --chart-5: oklch(0.4 0.14 262);
+    /* Blue chart ramp (light mode), via Tailwind palette tokens: 300 -> 900. */
+    --chart-1: var(--color-blue-300);
+    --chart-2: var(--color-blue-500);
+    --chart-3: var(--color-blue-600);
+    --chart-4: var(--color-blue-700);
+    --chart-5: var(--color-blue-900);
     --radius: 0.45rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.141 0.005 285.823);
@@ -103,12 +103,12 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.552 0.016 285.938);
-    /* Shades-of-blue chart palette (dark mode): brighter -> deeper blue. */
-    --chart-1: oklch(0.78 0.12 252);
-    --chart-2: oklch(0.7 0.14 254);
-    --chart-3: oklch(0.62 0.15 256);
-    --chart-4: oklch(0.54 0.15 258);
-    --chart-5: oklch(0.46 0.14 260);
+    /* Blue chart ramp (dark mode), via Tailwind palette tokens: 200 -> 700. */
+    --chart-1: var(--color-blue-200);
+    --chart-2: var(--color-blue-400);
+    --chart-3: var(--color-blue-500);
+    --chart-4: var(--color-blue-600);
+    --chart-5: var(--color-blue-700);
     --sidebar: oklch(0.21 0.006 285.885);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);

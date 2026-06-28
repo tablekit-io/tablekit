@@ -17,7 +17,14 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
-import {ChevronDown, Download, Loader2, TriangleAlert} from 'lucide-react';
+import {
+    Check,
+    ChevronDown,
+    Copy,
+    Download,
+    Loader2,
+    TriangleAlert,
+} from 'lucide-react';
 import {PrismLight as SyntaxHighlighter} from 'react-syntax-highlighter';
 import sqlLang from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
@@ -233,6 +240,7 @@ const App = () => {
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState('chart');
     const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
+    const [copied, setCopied] = useState(false);
 
     // Connect to the host and wire the input/result handlers before the
     // handshake completes (onAppCreated runs pre-connect).
@@ -323,6 +331,16 @@ const App = () => {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
             setExporting(null);
+        }
+    };
+
+    const copySql = async () => {
+        try {
+            await navigator.clipboard.writeText(data?.sql ?? '');
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // The host iframe may block clipboard access; nothing to do.
         }
     };
 
@@ -439,22 +457,36 @@ const App = () => {
                 </TabsContent>
 
                 <TabsContent value="sql">
-                    <div className="max-h-72 overflow-auto rounded-md border border-border bg-muted text-sm">
-                        <SyntaxHighlighter
-                            language="sql"
-                            style={theme === 'dark' ? oneDark : oneLight}
-                            // The prism theme paints a background on both <pre>
-                            // and <code>; clear both so the single bg-muted panel
-                            // shows through uniformly instead of per-line boxes.
-                            customStyle={{
-                                margin: 0,
-                                padding: '0.75rem',
-                                background: 'transparent',
-                            }}
-                            codeTagProps={{style: {background: 'transparent'}}}
-                            wrapLongLines>
-                            {data.sql || '-- no SQL available'}
-                        </SyntaxHighlighter>
+                    <div className="relative">
+                        {/* Floating copy button: sibling of the scroll area so it
+                            stays pinned while the SQL scrolls underneath. */}
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="absolute right-2 top-2 z-10 size-7"
+                            aria-label="Copy SQL"
+                            onClick={() => void copySql()}>
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                        </Button>
+                        <div className="max-h-72 overflow-auto rounded-md border border-border bg-muted text-sm">
+                            <SyntaxHighlighter
+                                language="sql"
+                                style={theme === 'dark' ? oneDark : oneLight}
+                                // The prism theme paints a background on both <pre>
+                                // and <code>; clear both so the single bg-muted
+                                // panel shows through uniformly, not per-line boxes.
+                                customStyle={{
+                                    margin: 0,
+                                    padding: '0.75rem',
+                                    background: 'transparent',
+                                }}
+                                codeTagProps={{
+                                    style: {background: 'transparent'},
+                                }}
+                                wrapLongLines>
+                                {data.sql || '-- no SQL available'}
+                            </SyntaxHighlighter>
+                        </div>
                     </div>
                 </TabsContent>
             </Tabs>
