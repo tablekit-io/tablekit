@@ -88,10 +88,14 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 		require.NotNil(t, tools[name], "tool %q should be registered", name)
 	}
 
-	// fetch_chart_data is app-only: it carries _meta.ui.visibility=['app'].
-	fetchUI := uiMeta(tools["fetch_chart_data"])
-	require.NotNil(t, fetchUI, "fetch_chart_data should carry _meta.ui")
-	assert.Equal(t, []any{"app"}, fetchUI["visibility"])
+	// fetch_chart_data and get_export_url are app-only: they carry
+	// _meta.ui.visibility=['app'] so the host hides them from the model and only
+	// honours them when the chart widget calls them over the bridge.
+	for _, name := range []string{"fetch_chart_data", "get_export_url"} {
+		appUI := uiMeta(tools[name])
+		require.NotNil(t, appUI, "%s should carry _meta.ui", name)
+		assert.Equal(t, []any{"app"}, appUI["visibility"], "%s should be app-only", name)
+	}
 
 	// Build-dependent: the render tools link the shared chart widget via
 	// _meta.ui.resourceUri only once @tablekit/widgets has been built into the

@@ -50,15 +50,21 @@ func (h *Handlers) getExportURL(ctx context.Context, _ *mcp.CallToolRequest, in 
 }
 
 // registerGetExportURL adds the get_export_url tool. It only signs a URL (no DB
-// access of its own), so it is read-only and not open-world.
+// access of its own), so it is read-only and not open-world. App-only: the
+// _meta.ui.visibility=['app'] hides it from the model — the chart widget's
+// download button calls it over the MCP Apps bridge and opens the link in the
+// user's real browser. An export link is a user-facing download affordance, not
+// something the agent needs to reason about.
 func (h *Handlers) registerGetExportURL(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	tool := &mcp.Tool{
 		Name:        "get_export_url",
-		Description: "Returns a short-lived signed URL that downloads the full result of a stored query as CSV or JSON. Pass the result_key from run_query and a format. The link re-runs the query when fetched and expires in a few minutes.",
+		Description: "Returns a short-lived signed URL that downloads the full result of a stored query as CSV or JSON. App-only: called by the chart widget's download button over the MCP Apps bridge, hidden from the agent.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			DestructiveHint: helpers.Pointer(false),
 			OpenWorldHint:   helpers.Pointer(false),
 		},
-	}, h.getExportURL)
+	}
+	tool.Meta = mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
+	mcp.AddTool(s, tool, h.getExportURL)
 }
