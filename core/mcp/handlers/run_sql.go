@@ -30,7 +30,7 @@ type runSQLOutput struct {
 // a read-only transaction under a statement timeout with row/size caps; binary
 // (non-UTF-8) values are omitted and reported in `omitted`.
 func (h *Handlers) runSQL(ctx context.Context, _ *mcp.CallToolRequest, in runSQLInput) (*mcp.CallToolResult, runSQLOutput, error) {
-	result, err := h.Services.Engine.RunReadOnly(ctx, in.Database, in.SQL)
+	result, err := h.Engine.RunReadOnly(ctx, in.Database, in.SQL)
 	if err != nil {
 		return nil, runSQLOutput{}, err
 	}

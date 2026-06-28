@@ -51,5 +51,5 @@ func MCPRoute(appServices *services.Services) http.Handler {
 	return auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
 		Scopes:              []string{oauth.Scope},
 		ResourceMetadataURL: appServices.Config.PublicBaseURL + "/.well-known/oauth-protected-resource",
-	})(mcp.StreamableHandler(appServices))
+	})(mcp.StreamableHandler(appServices.Engine))
 }

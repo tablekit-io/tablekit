@@ -9,7 +9,6 @@ import (
 	"core/services/oauth"
 	"core/services/store"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -60,38 +59,15 @@ var pairingTokenGenerateCmd = &cobra.Command{
 			return err
 		}
 
-		clientID := uuid.NewString()
-		tokenID := uuid.NewString()
-		now := time.Now()
-
-		// A bearer token registers as its own client: no redirect URIs, no name.
-		if err := appServices.Store.SaveClient(&store.Client{
-			ClientID:     clientID,
-			ClientName:   nil,
-			RedirectURIs: []string{},
-			Type:         "bearer",
-			CreatedAt:    now,
-		}); err != nil {
-			return err
-		}
-
-		token, expiresAt, err := appServices.Issuer.IssueBearer(clientID, tokenID)
+		minted, err := oauth.MintBearer(appServices.Store, appServices.Issuer)
 		if err != nil {
 			return err
 		}
-		if err := appServices.Store.PutBearerToken(&store.BearerToken{
-			ID:        tokenID,
-			ClientID:  clientID,
-			CreatedAt: now,
-			ExpiresAt: expiresAt,
-		}); err != nil {
-			return err
-		}
 
-		fmt.Printf("token id: %s\n", tokenID)
-		fmt.Printf("expires:  %s\n", expiresAt.Format(time.RFC3339))
+		fmt.Printf("token id: %s\n", minted.ID)
+		fmt.Printf("expires:  %s\n", minted.ExpiresAt.Format(time.RFC3339))
 		// Print the bearer value on its own final line so scripts can capture it.
-		fmt.Println(oauth.TokenPrefix + token)
+		fmt.Println(minted.Token)
 		return nil
 	},
 }

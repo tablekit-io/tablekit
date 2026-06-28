@@ -21,7 +21,7 @@ type listDatabasesOutput struct {
 // listDatabases returns the databases available to run_sql. It never exposes
 // hosts, credentials or any connection detail.
 func (h *Handlers) listDatabases(_ context.Context, _ *mcp.CallToolRequest, _ listDatabasesInput) (*mcp.CallToolResult, listDatabasesOutput, error) {
-	databases := h.Services.Engine.List()
+	databases := h.Engine.List()
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{
 			Text: fmt.Sprintf("%d database(s) configured.", len(databases)),

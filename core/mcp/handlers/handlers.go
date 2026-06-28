@@ -6,21 +6,21 @@ package handlers
 import (
 	"context"
 
+	"core/engine"
 	"core/mcp/ui"
-	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Handlers serves the MCP tools. It carries the shared Services so tools can
-// reach config and the store. Construct with New and wire with Register.
+// Handlers serves the MCP tools. It carries the query engine, the one dependency
+// the tools need. Construct with New and wire with Register.
 type Handlers struct {
-	Services *services.Services
+	Engine *engine.Service
 }
 
-// New wires the MCP tool handlers to the shared services.
-func New(appServices *services.Services) *Handlers {
-	return &Handlers{Services: appServices}
+// New wires the MCP tool handlers to the query engine.
+func New(engineService *engine.Service) *Handlers {
+	return &Handlers{Engine: engineService}
 }
 
 // Register wires every tool and the built widget UI resources onto s.

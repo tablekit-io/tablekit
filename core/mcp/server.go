@@ -1,5 +1,5 @@
 // Package mcp builds the MCP server — its tools and widget resources live in the
-// handlers subpackage, wired to the shared Services — and exposes it as a
+// handlers subpackage, wired to the query engine — and exposes it as a
 // Streamable HTTP handler. The handler is unauthenticated here; the OAuth
 // bearer-token guard is applied by the http layer that mounts it on /mcp.
 package mcp
@@ -7,29 +7,29 @@ package mcp
 import (
 	"net/http"
 
+	"core/engine"
 	"core/mcp/handlers"
-	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // newServer builds the MCP server and registers its tools and resources, wired
-// to the shared services.
-func newServer(appServices *services.Services) *mcp.Server {
+// to the query engine.
+func newServer(engineService *engine.Service) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "tablekit",
 		Title:   "tablekit MCP server",
 		Version: "0.1.0",
 	}, nil)
-	handlers.New(appServices).Register(server)
+	handlers.New(engineService).Register(server)
 	return server
 }
 
 // StreamableHandler returns the raw (unauthenticated) Streamable HTTP handler
-// for /mcp, wired to the shared services. The caller is responsible for applying
+// for /mcp, wired to the query engine. The caller is responsible for applying
 // auth.
-func StreamableHandler(appServices *services.Services) http.Handler {
-	server := newServer(appServices)
+func StreamableHandler(engineService *engine.Service) http.Handler {
+	server := newServer(engineService)
 	return mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{
