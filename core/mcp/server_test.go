@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
+	"core/engine"
 	"core/mcp/ui"
 	"core/services"
 	"core/services/config"
@@ -21,10 +23,12 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	serverT, clientT := mcp.NewInMemoryTransports()
 
 	// Registration only stores the service handles; the protocol tests below list
-	// tools and call the self-contained hello_world, neither of which touches the
-	// engine/queries/issuer. A bundle with just a Config (for PublicBaseURL) is
-	// enough — the data/chart tools that need those handles aren't exercised here.
-	server := newServer(&services.Services{Config: &config.Config{}})
+	// tools and call list_databases. list_databases needs a (possibly empty)
+	// engine, so wire one loaded from a nonexistent file (yields an empty Service,
+	// no error). Queries/Issuer stay nil — list_databases doesn't touch them.
+	emptyEngine, err := engine.Load(filepath.Join(t.TempDir(), "none.yaml"), engine.Limits{})
+	require.NoError(t, err)
+	server := newServer(&services.Services{Config: &config.Config{}, Engine: emptyEngine})
 	ss, err := server.Connect(ctx, serverT, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ss.Close() })
@@ -51,7 +55,7 @@ func toolsByName(t *testing.T, clientSession *mcp.ClientSession) map[string]*mcp
 func TestListToolsExposesAnnotationsAndSchema(t *testing.T) {
 	clientSession := connectInMemory(t)
 
-	tool := toolsByName(t, clientSession)["hello_world"]
+	tool := toolsByName(t, clientSession)["list_databases"]
 	require.NotNil(t, tool)
 	assert.NotNil(t, tool.OutputSchema, "tool should advertise an output schema")
 
@@ -71,32 +75,6 @@ func uiMeta(tool *mcp.Tool) map[string]any {
 		return nil
 	}
 	return ui
-}
-
-func TestInteractiveToolsRegistered(t *testing.T) {
-	clientSession := connectInMemory(t)
-	tools := toolsByName(t, clientSession)
-
-	// Build-independent: both tools are always registered.
-	require.NotNil(t, tools["hello_world_interactive"])
-	data := tools["hello_world_interactive_data"]
-	require.NotNil(t, data)
-
-	// The loader is app-only: _meta.ui.visibility advertises ['app'] regardless
-	// of whether the widget has been built (it carries no widget link).
-	dataUI := uiMeta(data)
-	require.NotNil(t, dataUI, "data tool should carry _meta.ui")
-	assert.Equal(t, []any{"app"}, dataUI["visibility"])
-
-	// Build-dependent: the model-facing tool links its widget via
-	// _meta.ui.resourceUri only when @tablekit/widgets has been built into the
-	// embed dir. A fresh checkout (placeholder manifest) carries no link.
-	if ui.WidgetURI("hello_world_interactive") != "" {
-		meta := uiMeta(tools["hello_world_interactive"])
-		require.NotNil(t, meta, "built interactive tool should carry _meta.ui")
-		uri, _ := meta["resourceUri"].(string)
-		assert.Contains(t, uri, "ui://tablekit/hello_world_interactive-")
-	}
 }
 
 func TestStoredQueryToolsRegistered(t *testing.T) {
@@ -142,7 +120,7 @@ func TestWidgetResourceIsServed(t *testing.T) {
 
 	var uri string
 	for _, r := range list.Resources {
-		if r.Name == "hello_world_interactive" {
+		if r.Name == "chart_renderer" {
 			uri = r.URI
 			assert.Equal(t, "text/html;profile=mcp-app", r.MIMEType)
 		}
@@ -158,9 +136,10 @@ func TestWidgetResourceIsServed(t *testing.T) {
 func TestCallToolReturnsStructuredContent(t *testing.T) {
 	clientSession := connectInMemory(t)
 
+	// list_databases runs against the empty engine wired in connectInMemory, so
+	// it returns zero databases — enough to exercise the text + structured result.
 	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "hello_world",
-		Arguments: map[string]any{"name": "omran"},
+		Name: "list_databases",
 	})
 	require.NoError(t, err)
 	assert.False(t, result.IsError)
@@ -168,9 +147,9 @@ func TestCallToolReturnsStructuredContent(t *testing.T) {
 	require.Len(t, result.Content, 1)
 	text, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	assert.Equal(t, "Hello, omran!", text.Text)
+	assert.Equal(t, "0 database(s) configured.", text.Text)
 
 	structured, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "Hello, omran!", structured["greeting"])
+	assert.Empty(t, structured["databases"])
 }

@@ -31,14 +31,15 @@ func TestEnvSigningKey(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = clientSession.Close() })
 
+	// Any successful MCP call proves the env signing key is accepted on /mcp;
+	// list_databases is the simplest read-only tool.
 	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "hello_world",
-		Arguments: map[string]any{"name": "key"},
+		Name: "list_databases",
 	})
 	require.NoError(t, err)
 	text, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	assert.Equal(t, "Hello, key!", text.Text)
+	assert.Contains(t, text.Text, "database(s) configured.")
 
 	// The env key takes precedence, so no key file is generated.
 	assert.NoFileExists(t, filepath.Join(server.DataDir, "signing.key"))

@@ -19,7 +19,7 @@
         "esModuleInterop": true,
         "resolveJsonModule": true,
         "isolatedModules": true,
-        "types": ["node", "react-syntax-highlighter"]
+        "types": ["node"]
     },
     "include": ["src", "vite.config.ts"]
 }

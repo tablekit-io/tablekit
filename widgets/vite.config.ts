@@ -14,10 +14,6 @@ const ROOT = fileURLToPath(new URL('.', import.meta.url));
 // template by dropping a folder under src/ and listing it here, then add the
 // name to build.mjs's ENTRIES list.
 const ALL_ENTRIES: Readonly<Record<string, string>> = {
-    'hello_world_interactive': resolve(
-        ROOT,
-        'src/hello_world_interactive/index.html',
-    ),
     'chart_renderer': resolve(ROOT, 'src/chart_renderer/index.html'),
 };
 

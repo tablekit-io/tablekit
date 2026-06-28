@@ -26,32 +26,28 @@ func TestMCPListAndCallTool(t *testing.T) {
 
 	list, err := clientSession.ListTools(ctx, &mcpsdk.ListToolsParams{})
 	require.NoError(t, err)
-	// ListTools is the protocol-level listing: it returns every registered tool
-	// (hello_world plus the interactive widget and its app-only data loader).
+	// ListTools is the protocol-level listing: it returns every registered tool.
 	// App-only visibility is a host-side filter, not a protocol one, so look the
 	// tool up by name rather than asserting it's the only one.
 	byName := make(map[string]*mcpsdk.Tool, len(list.Tools))
 	for _, listed := range list.Tools {
 		byName[listed.Name] = listed
 	}
-	tool := byName["hello_world"]
+	tool := byName["list_databases"]
 	require.NotNil(t, tool)
-	assert.Equal(t, "hello_world", tool.Name)
+	assert.Equal(t, "list_databases", tool.Name)
 	assert.NotNil(t, tool.OutputSchema)
 	require.NotNil(t, tool.Annotations)
 	assert.True(t, tool.Annotations.ReadOnlyHint)
 
 	result, err := clientSession.CallTool(ctx, &mcpsdk.CallToolParams{
-		Name:      "hello_world",
-		Arguments: map[string]any{"name": "omran"},
+		Name: "list_databases",
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 	text, ok := result.Content[0].(*mcpsdk.TextContent)
 	require.True(t, ok)
-	assert.Equal(t, "Hello, omran!", text.Text)
-	structured := result.StructuredContent.(map[string]any)
-	assert.Equal(t, "Hello, omran!", structured["greeting"])
+	assert.Contains(t, text.Text, "database(s) configured.")
 }
 
 func TestMCPUnauthenticatedRejected(t *testing.T) {

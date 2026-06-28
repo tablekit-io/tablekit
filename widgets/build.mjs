@@ -14,7 +14,7 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 
 // The templates to build, one per src/<name>/ folder. Keep in sync with
 // vite.config.ts's ALL_ENTRIES.
-const ENTRIES = ['hello_world_interactive', 'chart_renderer'];
+const ENTRIES = ['chart_renderer'];
 
 const watch = process.argv.includes('--watch');
 
