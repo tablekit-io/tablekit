@@ -488,10 +488,10 @@ const App = () => {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="absolute right-2 top-2 z-10 size-7"
+                            className="absolute right-2 top-2 z-10 size-8"
                             aria-label="Copy SQL"
                             onClick={() => void copySql()}>
-                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                            {copied ? <Check size={13} /> : <Copy size={13} />}
                         </Button>
                         <div className="max-h-72 overflow-auto rounded-md border border-border bg-muted text-sm">
                             <SyntaxHighlighter
