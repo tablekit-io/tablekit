@@ -123,6 +123,6 @@ func applyPairingMode(mode string) error {
 func init() {
 	pairingEnableCmd.Flags().BoolVar(&pairingOnce, "once", false, "admit a single next client, then lock")
 	pairingEnableCmd.Flags().BoolVar(&pairingIndefinitely, "indefinitely", false, "keep pairing open for any number of clients")
+
 	pairingCmd.AddCommand(pairingEnableCmd, pairingDisableCmd, pairingTokenGenerateCmd, pairingTokenRevokeCmd)
-	rootCmd.AddCommand(pairingCmd)
 }

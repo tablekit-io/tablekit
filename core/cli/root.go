@@ -20,4 +20,5 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(pairingCmd)
 }
