@@ -6,20 +6,13 @@
 .idea/
 .env
 
-# Widgets (Node/bun) — deps and local build output
-widgets/node_modules/
-widgets/dist/
-
-# Generated widget builds embedded by core. Only widgets/.gitkeep is committed so
-# //go:embed all:widgets compiles before the first build; the manifest and the
-# content-hashed HTML the vite build emits are ignored.
+# Generated widget builds embedded by core. These live in a //go:embed all:widgets
+# directory, so a local .gitignore there would itself be embedded — hence these
+# stay here. Only widgets/.gitkeep is committed so the embed compiles before the
+# first build; the manifest and content-hashed HTML the vite build emits are ignored.
 core/mcp/ui/widgets/*.html
 core/mcp/ui/widgets/manifest.json
 
 /data
 /databases.example.yml
 /docker-compose.example.yml
-
-# Generated cafe sample data (produced by generate_cafe_data.go; regenerated
-# on demand by the e2e tests). Committed generator, ignored output.
-core/e2e/database/test-data/cafe_data.sql

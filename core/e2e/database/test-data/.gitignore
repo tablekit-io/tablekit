@@ -1,0 +1,3 @@
+# Generated cafe sample data (produced by generate_cafe_data.go; regenerated on
+# demand by the e2e tests). Committed generator, ignored output.
+cafe_data.sql
