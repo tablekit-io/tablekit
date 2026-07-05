@@ -1,28 +1,38 @@
-package db
+package db_test
 
 import (
-	"path/filepath"
+	"os"
 	"testing"
+
+	"core/db"
+	"core/db/dbtest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestOpenCreatesMissingDataDir: a fresh, not-yet-existing data directory is
-// created on Open rather than failing — sqlite won't create missing parents, and
-// db.Open is the first startup consumer of DATA_DIR.
-func TestOpenCreatesMissingDataDir(t *testing.T) {
-	dataDir := filepath.Join(t.TempDir(), "nested", "data")
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available).
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
 
-	database, err := Open(dataDir)
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
+// TestMigrateBringsSchemaUp: a fresh database has the migrations applied, so the
+// state tables exist and are queryable. dbtest.New already runs db.Migrate; this
+// asserts the schema it produces is what the store code expects.
+func TestMigrateBringsSchemaUp(t *testing.T) {
+	database := dbtest.New(t)
 
-	assert.DirExists(t, dataDir)
-	assert.FileExists(t, filepath.Join(dataDir, dbFileName))
+	// Migrate again to prove idempotence (goose tracks applied revisions).
+	require.NoError(t, db.Migrate(database))
 
-	// Migrations ran: the descriptor table is queryable.
-	require.NoError(t, database.Ping())
-	_, err = database.Exec(`SELECT 1`)
-	require.NoError(t, err)
+	for _, table := range []string{
+		"mcp_queries", "oauth_clients", "oauth_auth_codes", "oauth_token_chains",
+		"oauth_bearer_tokens", "oauth_paired_clients", "config",
+	} {
+		var count int
+		err := database.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count)
+		require.NoErrorf(t, err, "table %s should exist and be queryable", table)
+		assert.Zero(t, count, "fresh %s should be empty", table)
+	}
 }

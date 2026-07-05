@@ -8,7 +8,16 @@ services:
       # The externally reachable base url; used as the OAuth issuer.
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
 
-      # TableKit's own state. (see volumes)
+      # TableKit's own state lives in the postgres service below. The
+      # structured DB_* vars take precedence over DATABASE_URL; change the
+      # password to match the database service.
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: "${DB_PASSWORD:-pw}"
+      DB_NAME: tablekit
+
+      # DATA_DIR now holds only signing.key (a raw secret). (see volumes)
       DATA_DIR: /data
 
       # Where the databases config is read from. Resolved by base name, so either
@@ -49,4 +58,33 @@ services:
       retries: 3
       start_period: 20s
 
+    depends_on:
+      postgres:
+        condition: service_healthy
+
     restart: unless-stopped
+
+  # TableKit's own state database (OAuth/MCP state + the run_query descriptor
+  # log). core migrates it on boot; the DB_* env above points at it. Not
+  # published to the host — only core (on the default compose network) reaches it.
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-pw}"
+      POSTGRES_DB: tablekit
+    volumes:
+      - type: volume
+        source: appdata
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  # Persists TableKit's own state (the postgres database).
+  appdata:

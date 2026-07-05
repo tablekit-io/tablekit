@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=./engine/config/schemas/databases.schema.json
-# Dev-only: points at the postgres service in docker-compose.yml (cafe DB).
+# Dev-only: points at the example-cafe-db service in docker-compose.yml (cafe DB).
 # Wired in via DATABASES_FILE=/app/databases.dev.yaml in the core service.
 databases:
   cafe:
     type: postgres
     details:
-      host: postgres        # docker-compose service name on the tablekit network
+      host: example-cafe-db         # docker-compose service name on the tablekit network
       port: 5432
       database: cafe
       username: postgres

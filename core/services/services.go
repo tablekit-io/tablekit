@@ -30,9 +30,9 @@ type Services struct {
 // configured databases.
 func New() (*Services, error) {
 	configService := config.Load()
-	// Open the SQLite database first: the store now persists its OAuth state in
-	// it (and only signing.key stays a file).
-	database, err := db.Open(configService.DataDir)
+	// Open the Postgres database first: the store persists its OAuth state in it
+	// (only signing.key stays a file under DataDir).
+	database, err := db.Open(configService.DatabaseDSN())
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func New() (*Services, error) {
 	}, nil
 }
 
-// Close releases resources held by the services (currently the SQLite handle).
+// Close releases resources held by the services (currently the database handle).
 // Call it on shutdown.
 func (s *Services) Close() error {
 	if s.DB != nil {

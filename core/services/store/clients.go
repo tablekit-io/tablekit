@@ -43,7 +43,7 @@ func (s *Store) SaveClient(ctx context.Context, c *Client) error {
 	}
 	_, err = s.database.ExecContext(ctx,
 		`INSERT INTO oauth_clients (client_id, client_name, type, redirect_uris, created_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5)`,
 		c.ClientID, c.ClientName, c.Type, string(redirectURIs), c.CreatedAt,
 	)
 	if err != nil {
@@ -56,7 +56,7 @@ func (s *Store) SaveClient(ctx context.Context, c *Client) error {
 func (s *Store) GetClient(ctx context.Context, id string) (*Client, error) {
 	row := s.database.QueryRowContext(ctx,
 		`SELECT client_id, client_name, type, redirect_uris, created_at
-		 FROM oauth_clients WHERE client_id = ?`,
+		 FROM oauth_clients WHERE client_id = $1`,
 		id,
 	)
 	var (
@@ -85,7 +85,7 @@ func (s *Store) GetClient(ctx context.Context, id string) (*Client, error) {
 //   - indefinite: every new client paired; mode unchanged
 func (s *Store) TryPair(ctx context.Context, clientID string) (bool, error) {
 	// Serialize the read-check-write in-process so concurrent pairings under
-	// "once" cannot both win a SQLite snapshot race (single-instance server).
+	// "once" cannot both win a snapshot race (single-instance server).
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -97,7 +97,7 @@ func (s *Store) TryPair(ctx context.Context, clientID string) (bool, error) {
 
 	var existing string
 	err = tx.QueryRowContext(ctx,
-		`SELECT client_id FROM oauth_paired_clients WHERE client_id = ?`, clientID,
+		`SELECT client_id FROM oauth_paired_clients WHERE client_id = $1`, clientID,
 	).Scan(&existing)
 	if err == nil {
 		return true, nil // already paired
@@ -180,7 +180,7 @@ type querier interface {
 // apply their own default.
 func getConfig(ctx context.Context, q querier, key string, dest any) (bool, error) {
 	var raw string
-	err := q.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, key).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT value FROM config WHERE key = $1`, key).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -200,7 +200,7 @@ func setConfig(ctx context.Context, q querier, key string, value any) error {
 		return fmt.Errorf("encode config %q: %w", key, err)
 	}
 	_, err = q.ExecContext(ctx,
-		`INSERT INTO config (key, value) VALUES (?, ?)
+		`INSERT INTO config (key, value) VALUES ($1, $2)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 		key, string(raw),
 	)
@@ -232,7 +232,7 @@ func setPairingMode(ctx context.Context, q querier, mode string) error {
 // pairClient adds clientID to the paired set (idempotent).
 func pairClient(ctx context.Context, q querier, clientID string) error {
 	_, err := q.ExecContext(ctx,
-		`INSERT INTO oauth_paired_clients (client_id) VALUES (?)
+		`INSERT INTO oauth_paired_clients (client_id) VALUES ($1)
 		 ON CONFLICT(client_id) DO NOTHING`,
 		clientID,
 	)

@@ -1,7 +1,7 @@
 -- +goose Up
 -- OAuth/MCP server state, moved out of the former clients.json / tokens.json
--- flat files into SQLite. Table names mirror the reference Postgres schema the
--- store package was always modeled on (oauth_clients, oauth_auth_codes,
+-- flat files into the database. Table names mirror the reference Postgres schema
+-- the store package was always modeled on (oauth_clients, oauth_auth_codes,
 -- oauth_token_chains). signing.key stays a file — it is a raw secret, not JSON.
 
 -- Registered OAuth clients (RFC 7591) plus CLI bearer clients (type='bearer',
@@ -12,7 +12,7 @@ CREATE TABLE oauth_clients (
     client_name   TEXT,
     type          TEXT NOT NULL DEFAULT '',
     redirect_uris TEXT NOT NULL DEFAULT '[]',
-    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- One-time, PKCE-bound authorization codes. Deleted on redemption (single use).
@@ -23,7 +23,7 @@ CREATE TABLE oauth_auth_codes (
     code_challenge TEXT NOT NULL,
     scope          TEXT NOT NULL,
     user_id        TEXT NOT NULL,
-    expires_at     TIMESTAMP NOT NULL
+    expires_at     TIMESTAMPTZ NOT NULL
 );
 
 -- Refresh-token lineages. invalidated_before is the rotation cutoff: any refresh
@@ -34,9 +34,9 @@ CREATE TABLE oauth_token_chains (
     user_id            TEXT NOT NULL,
     scope              TEXT NOT NULL,
     redirect_uri       TEXT NOT NULL,
-    revoked            BOOLEAN NOT NULL DEFAULT 0,
-    invalidated_before TIMESTAMP NOT NULL,
-    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    revoked            BOOLEAN NOT NULL DEFAULT FALSE,
+    invalidated_before TIMESTAMPTZ NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Long-lived CLI-minted bearer tokens, looked up by jti on every MCP request so
@@ -44,9 +44,9 @@ CREATE TABLE oauth_token_chains (
 CREATE TABLE oauth_bearer_tokens (
     id         TEXT PRIMARY KEY,
     client_id  TEXT NOT NULL,
-    revoked    BOOLEAN NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL,
-    expires_at TIMESTAMP NOT NULL
+    revoked    BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL
 );
 
 -- Clients allowed to authenticate. Membership is the paired set.

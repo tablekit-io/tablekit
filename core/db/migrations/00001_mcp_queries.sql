@@ -8,7 +8,7 @@ CREATE TABLE mcp_queries (
     database    TEXT NOT NULL,
     sql         TEXT NOT NULL,
     description TEXT NOT NULL,
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- +goose Down

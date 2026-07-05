@@ -14,8 +14,15 @@ services:
       TABLEKIT_E2E_DOCKER_NETWORK: tablekit
       # Point run_sql at the committed dev DB config (core/ is bind-mounted to
       # /app below). Overrides the default ./databases.yaml, which is
-      # gitignored. databases.dev.yaml targets the postgres service (cafe DB).
+      # gitignored. databases.dev.yaml targets the example-cafe-db service (cafe DB).
       DATABASES_FILE: /app/databases.dev.yaml
+      # TableKit's own state lives in the dedicated `postgres` service (separate
+      # from example-cafe-db). Structured DB_* vars take precedence over DATABASE_URL.
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: pw
+      DB_NAME: tablekit
     # host.docker.internal resolves to the host on Docker Desktop natively; the
     # host-gateway mapping gives Linux the same name for the published-port
     # fallback path (see README).
@@ -55,11 +62,39 @@ services:
       timeout: 3s
       retries: 3
       start_period: 60s
-    # Wait for postgres to finish seeding cafe before core boots, so the
-    # first run_sql has a database to hit.
+    # Wait for the app-state postgres (so migrations have somewhere to run) and
+    # for example-cafe-db to finish seeding (so the first run_sql has data to hit).
     depends_on:
       postgres:
         condition: service_healthy
+      example-cafe-db:
+        condition: service_healthy
+
+  # Dev-only: TableKit's own state database (OAuth/MCP state + the run_query
+  # descriptor log). Separate from example-cafe-db so the app's tables never mix with the
+  # sample query data. core migrates this on boot; the DB_* env above points at
+  # it. Persisted in the appdata volume across recreation (down -v to reset).
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pw
+      POSTGRES_DB: tablekit
+    networks:
+      - tablekit
+    ports:
+      # Published on 5433 (example-cafe-db already owns host 5432) for a host psql/GUI.
+      - "5433:5432"
+    volumes:
+      - type: volume
+        source: appdata
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   # Dev-only: a real Postgres pre-seeded with the cafe sample database, so
   # `docker compose up` gives run_sql actual data to query (and a real ChatGPT
@@ -70,7 +105,7 @@ services:
   # cafe_data.sql is a generator artifact (gitignored). Generate it before the
   # first `docker compose up`, else the bind mount below has no source file:
   #   (cd core/e2e/database/test-data && go run generate_cafe_data.go)
-  postgres:
+  example-cafe-db:
     image: postgres:17
     environment:
       POSTGRES_USER: postgres
@@ -126,7 +161,9 @@ services:
 
 volumes:
   gocache:
-  # Seeded cafe data for the dev postgres service.
+  # TableKit's own state for the app-state postgres service.
+  appdata:
+  # Seeded cafe data for the example-cafe-db service.
   pgdata:
 
 networks:

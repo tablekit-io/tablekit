@@ -78,6 +78,10 @@ type Server struct {
 	AppURL     string
 	ControlURL string
 	DataDir    string
+	// DBEnv is the DB_* environment pointing at this server's own state database.
+	// CLI helpers (RunCLI, GenerateToken) must pass it so they hit the same
+	// database the server does.
+	DBEnv []string
 }
 
 // StartServer starts the binary on random free ports with a fresh data dir.
@@ -86,8 +90,13 @@ func StartServer(t *testing.T) Server {
 }
 
 // StartServerEnv is StartServer with extra "KEY=value" environment entries.
+//
+// The server keeps its own state in Postgres, so this provisions a throwaway
+// Postgres on the shared docker network and points the binary at it — which
+// means a running server needs docker; without it the test skips (RequireDocker).
 func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	t.Helper()
+	RequireDocker(t)
 	bin := ensureBinary(t)
 	appPort, controlPort := freePort(t), freePort(t)
 	dataDir := t.TempDir()
@@ -101,6 +110,8 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 		"DATA_DIR="+dataDir,
 		"PUBLIC_BASE_URL="+appURL,
 	)
+	stateDBEnv := startStateDB(t)
+	cmd.Env = append(cmd.Env, stateDBEnv...)
 	cmd.Env = append(cmd.Env, extraEnv...)
 	cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Start())
@@ -110,7 +121,30 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	})
 
 	waitHealthy(t, controlURL)
-	return Server{AppURL: appURL, ControlURL: controlURL, DataDir: dataDir}
+	return Server{AppURL: appURL, ControlURL: controlURL, DataDir: dataDir, DBEnv: stateDBEnv}
+}
+
+// startStateDB starts a throwaway Postgres for the server's own state and returns
+// the DB_* environment the server needs to reach it. The server (a process on the
+// shared docker network) reaches the database by its container name, so this
+// requires docker — StartServerEnv gates on it before calling here.
+func startStateDB(t *testing.T) []string {
+	t.Helper()
+	name := RunContainer(t, ContainerSpec{
+		Name:  UniqueName("statedb"),
+		Image: "postgres:17",
+		Env:   []string{"POSTGRES_PASSWORD=pw", "POSTGRES_DB=tablekit"},
+		Tmpfs: []string{"/var/lib/postgresql/data"},
+	})
+	WaitContainerReady(t, name, 60*time.Second,
+		"psql", "-U", "postgres", "-d", "tablekit", "-c", "SELECT 1")
+	return []string{
+		"DB_HOST=" + name,
+		"DB_PORT=5432",
+		"DB_USER=postgres",
+		"DB_PASSWORD=pw",
+		"DB_NAME=tablekit",
+	}
 }
 
 // freePort asks the OS for an unused TCP port, then releases it.

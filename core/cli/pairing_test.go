@@ -6,14 +6,23 @@ import (
 	"testing"
 
 	"core/db"
+	"core/db/dbtest"
 	"core/services/store"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available). The pairing commands construct services.New, which
+// opens tablekit's own state database.
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
+
 func TestPairingEnable(t *testing.T) {
 	t.Setenv("DATA_DIR", t.TempDir())
+	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
 
 	tests := []struct {
 		name     string
@@ -44,6 +53,7 @@ func TestPairingEnable(t *testing.T) {
 
 func TestPairingDisable(t *testing.T) {
 	t.Setenv("DATA_DIR", t.TempDir())
+	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
 	pairingDisableCmd.SetContext(context.Background())
 	require.NoError(t, pairingDisableCmd.RunE(pairingDisableCmd, nil))
 	assertMode(t, store.PairingDisabled)
@@ -51,11 +61,10 @@ func TestPairingDisable(t *testing.T) {
 
 func assertMode(t *testing.T, want string) {
 	t.Helper()
-	dataDir := os.Getenv("DATA_DIR")
-	database, err := db.Open(dataDir)
+	database, err := db.Open(os.Getenv("DATABASE_URL"))
 	require.NoError(t, err)
 	t.Cleanup(func() { database.Close() })
-	storageService, err := store.New(dataDir, database)
+	storageService, err := store.New(os.Getenv("DATA_DIR"), database)
 	require.NoError(t, err)
 	mode, _, err := storageService.PairingStatus(context.Background())
 	require.NoError(t, err)

@@ -1,8 +1,8 @@
 // Package store is the persistence layer for the OAuth/MCP server. It reads and
-// writes the oauth_* tables in tablekit's SQLite database (schema owned by the
+// writes the oauth_* tables in tablekit's Postgres database (schema owned by the
 // db package's goose migrations) and, separately, the HS256 signing key.
 //
-// State that lives in SQLite:
+// State that lives in Postgres:
 //   - oauth_clients        registered clients + CLI bearer clients (clients.go)
 //   - oauth_paired_clients  pairing set; config  pairing mode    (clients.go)
 //   - oauth_auth_codes     one-time PKCE auth codes               (tokens.go)
@@ -11,8 +11,8 @@
 //
 // The one thing not in the database is signing.key: a raw HS256 secret kept as a
 // file under directory, generated on first use (signing.go). The mutex guards
-// only that file; SQLite handles its own concurrency (WAL + busy_timeout), and
-// the few read-modify-write flows use transactions.
+// only that file; Postgres handles its own concurrency, and the few
+// read-modify-write flows use transactions.
 package store
 
 import (

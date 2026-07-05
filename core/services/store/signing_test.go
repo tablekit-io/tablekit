@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"core/db"
+	"core/db/dbtest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,9 +48,7 @@ func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(keyPath, legacy, 0o600))
 
-	database, err := db.Open(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
+	database := dbtest.New(t)
 
 	// New() migrates the file in place at boot.
 	storageService, err := New(directory, database)

@@ -62,7 +62,7 @@ func TestBearerTokenRevoked(t *testing.T) {
 
 	// Revoke by id, then the token is rejected (the server checks the token's
 	// row in the database per request).
-	harness.RunCLI(t, server.DataDir, "pairing", "token:revoke", tokenID)
+	harness.RunCLI(t, server, "pairing", "token:revoke", tokenID)
 	_, err = harness.Connect(t, server.AppURL, harness.BearerClient(token))
 	assert.Error(t, err, "revoked bearer token must be rejected")
 }
@@ -72,7 +72,7 @@ func TestBearerTokenRevokeByToken(t *testing.T) {
 	server := harness.StartServer(t)
 	_, token := harness.GenerateToken(t, server)
 
-	harness.RunCLI(t, server.DataDir, "pairing", "token:revoke", token)
+	harness.RunCLI(t, server, "pairing", "token:revoke", token)
 	_, err := harness.Connect(t, server.AppURL, harness.BearerClient(token))
 	assert.Error(t, err, "revoked-by-token bearer token must be rejected")
 }

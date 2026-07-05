@@ -5,13 +5,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"core/db/dbtest"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available); New opens tablekit's own state database.
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
+
 func TestNewWiresConfigAndStore(t *testing.T) {
 	directory := t.TempDir()
 	t.Setenv("DATA_DIR", directory)
+	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
 	t.Setenv("SIGNING_KEY", "") // force the store-backed key path
 
 	appServices, err := New()
@@ -30,7 +39,9 @@ func TestNewWiresConfigAndStore(t *testing.T) {
 }
 
 func TestNewFailsOnUnusableDataDir(t *testing.T) {
-	// Point DATA_DIR under a regular file so the store can't create it → New errors.
+	// A reachable database gets New past db.Open, so it reaches the store, which
+	// can't create signing.key's directory under a regular file → New errors.
+	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
 	blocker := filepath.Join(t.TempDir(), "not-a-dir")
 	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
 	t.Setenv("DATA_DIR", filepath.Join(blocker, "sub"))

@@ -52,7 +52,7 @@ func (s *Store) PutCode(ctx context.Context, c *AuthCode) error {
 	_, err := s.database.ExecContext(ctx,
 		`INSERT INTO oauth_auth_codes
 		 (code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		c.Code, c.ClientID, c.RedirectURI, c.CodeChallenge, c.Scope, c.UserID, c.ExpiresAt,
 	)
 	if err != nil {
@@ -74,7 +74,7 @@ func (s *Store) ConsumeCode(ctx context.Context, code string) (*AuthCode, error)
 	var c AuthCode
 	err = tx.QueryRowContext(ctx,
 		`SELECT code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at
-		 FROM oauth_auth_codes WHERE code = ?`, code,
+		 FROM oauth_auth_codes WHERE code = $1`, code,
 	).Scan(&c.Code, &c.ClientID, &c.RedirectURI, &c.CodeChallenge, &c.Scope, &c.UserID, &c.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -82,7 +82,7 @@ func (s *Store) ConsumeCode(ctx context.Context, code string) (*AuthCode, error)
 	if err != nil {
 		return nil, fmt.Errorf("read auth code: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_auth_codes WHERE code = ?`, code); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_auth_codes WHERE code = $1`, code); err != nil {
 		return nil, fmt.Errorf("consume auth code: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -98,7 +98,7 @@ func (s *Store) NewChain(ctx context.Context, c *Chain) error {
 	_, err := s.database.ExecContext(ctx,
 		`INSERT INTO oauth_token_chains
 		 (id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		c.ID, c.ClientID, c.UserID, c.Scope, c.RedirectURI, c.Revoked, c.InvalidatedBefore, c.CreatedAt,
 	)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *Store) NewChain(ctx context.Context, c *Chain) error {
 func (s *Store) GetChain(ctx context.Context, id string) (*Chain, error) {
 	row := s.database.QueryRowContext(ctx,
 		`SELECT id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at
-		 FROM oauth_token_chains WHERE id = ?`, id,
+		 FROM oauth_token_chains WHERE id = $1`, id,
 	)
 	var c Chain
 	err := row.Scan(&c.ID, &c.ClientID, &c.UserID, &c.Scope, &c.RedirectURI,
@@ -128,7 +128,7 @@ func (s *Store) GetChain(ctx context.Context, id string) (*Chain, error) {
 // BumpCutoff advances a chain's InvalidatedBefore to t (rotation).
 func (s *Store) BumpCutoff(ctx context.Context, id string, t time.Time) error {
 	_, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_token_chains SET invalidated_before = ? WHERE id = ?`, t, id,
+		`UPDATE oauth_token_chains SET invalidated_before = $1 WHERE id = $2`, t, id,
 	)
 	if err != nil {
 		return fmt.Errorf("bump chain cutoff %q: %w", id, err)
@@ -139,7 +139,7 @@ func (s *Store) BumpCutoff(ctx context.Context, id string, t time.Time) error {
 // RevokeChain marks a chain revoked (replay detected / logout).
 func (s *Store) RevokeChain(ctx context.Context, id string) error {
 	_, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_token_chains SET revoked = 1 WHERE id = ?`, id,
+		`UPDATE oauth_token_chains SET revoked = TRUE WHERE id = $1`, id,
 	)
 	if err != nil {
 		return fmt.Errorf("revoke chain %q: %w", id, err)
@@ -153,7 +153,7 @@ func (s *Store) RevokeChain(ctx context.Context, id string) error {
 func (s *Store) PutBearerToken(ctx context.Context, t *BearerToken) error {
 	_, err := s.database.ExecContext(ctx,
 		`INSERT INTO oauth_bearer_tokens (id, client_id, revoked, created_at, expires_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5)`,
 		t.ID, t.ClientID, t.Revoked, t.CreatedAt, t.ExpiresAt,
 	)
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *Store) PutBearerToken(ctx context.Context, t *BearerToken) error {
 func (s *Store) GetBearerToken(ctx context.Context, id string) (*BearerToken, error) {
 	row := s.database.QueryRowContext(ctx,
 		`SELECT id, client_id, revoked, created_at, expires_at
-		 FROM oauth_bearer_tokens WHERE id = ?`, id,
+		 FROM oauth_bearer_tokens WHERE id = $1`, id,
 	)
 	var t BearerToken
 	err := row.Scan(&t.ID, &t.ClientID, &t.Revoked, &t.CreatedAt, &t.ExpiresAt)
@@ -183,7 +183,7 @@ func (s *Store) GetBearerToken(ctx context.Context, id string) (*BearerToken, er
 // is unknown, so the CLI can tell the user nothing was revoked.
 func (s *Store) RevokeBearerToken(ctx context.Context, id string) error {
 	result, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_bearer_tokens SET revoked = 1 WHERE id = ?`, id,
+		`UPDATE oauth_bearer_tokens SET revoked = TRUE WHERE id = $1`, id,
 	)
 	if err != nil {
 		return fmt.Errorf("revoke bearer token %q: %w", id, err)

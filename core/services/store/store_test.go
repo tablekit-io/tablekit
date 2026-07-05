@@ -1,21 +1,25 @@
 package store
 
 import (
+	"os"
 	"testing"
 
-	"core/db"
+	"core/db/dbtest"
 
 	"github.com/stretchr/testify/require"
 )
 
-// newStore returns a Store backed by a fresh migrated SQLite database (for the
-// oauth_* tables) and a temp dir (for signing.key). The database is closed when
-// the test ends.
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available), so each test gets an isolated migrated database.
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
+
+// newStore returns a Store backed by a fresh migrated Postgres database (for the
+// oauth_* tables) and a temp dir (for signing.key).
 func newStore(t *testing.T) *Store {
 	t.Helper()
-	database, err := db.Open(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
+	database := dbtest.New(t)
 	storageService, err := New(t.TempDir(), database)
 	require.NoError(t, err)
 	return storageService

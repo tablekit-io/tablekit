@@ -53,7 +53,7 @@ COPY --from=build /tablekit /usr/local/bin/tablekit
 
 USER tablekit
 
-# TableKit's own state (SQLite tablekit.db, signing.key, OAuth/pairing JSON).
+# TableKit's own state lives in Postgres now; DATA_DIR holds only signing.key.
 ENV DATA_DIR=/data
 
 VOLUME ["/data"]

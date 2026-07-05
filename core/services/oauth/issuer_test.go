@@ -3,18 +3,25 @@ package oauth
 import (
 	"database/sql"
 	"encoding/base64"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"core/db"
+	"core/db/dbtest"
 	"core/services/config"
 	"core/services/store"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available), so each test gets an isolated migrated database.
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
 
 func newIssuer(t *testing.T, configService *config.Config) *Issuer {
 	t.Helper()
@@ -210,13 +217,10 @@ func newStore(t *testing.T) (*store.Store, string) {
 	return storageService, directory
 }
 
-// openTestDB opens a migrated SQLite database in a temp dir, closed at test end.
+// openTestDB returns a fresh migrated Postgres database, dropped at test end.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	database, err := db.Open(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
-	return database
+	return dbtest.New(t)
 }
 
 func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {

@@ -2,23 +2,27 @@ package queries_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
-	"core/db"
+	"core/db/dbtest"
 	"core/services/queries"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// newRepository opens a migrated SQLite database in a temp dir and returns a
-// repository over it. The database is closed when the test ends.
+// TestMain starts one throwaway Postgres for the whole package (skipped where
+// docker isn't available), so each test gets an isolated migrated database.
+func TestMain(m *testing.M) {
+	os.Exit(dbtest.Main(m))
+}
+
+// newRepository opens a fresh migrated Postgres database and returns a repository
+// over it. The database is dropped when the test ends.
 func newRepository(t *testing.T) *queries.Repository {
 	t.Helper()
-	database, err := db.Open(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
-	return queries.New(database)
+	return queries.New(dbtest.New(t))
 }
 
 func TestSaveThenGet(t *testing.T) {

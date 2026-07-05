@@ -43,7 +43,7 @@ func TestPairingDefaultOnce(t *testing.T) {
 
 func TestPairingEnableIndefinitely(t *testing.T) {
 	server := harness.StartServer(t)
-	harness.RunCLI(t, server.DataDir, "pairing", "enable", "--indefinitely")
+	harness.RunCLI(t, server, "pairing", "enable", "--indefinitely")
 
 	// Multiple distinct clients can now pair.
 	assert.True(t, pairs(t, server.AppURL))
@@ -59,7 +59,7 @@ func TestPairingDisable(t *testing.T) {
 	code := harness.AuthorizeCode(t, server.AppURL, clientID, challenge)
 	harness.ExchangeCode(t, server.AppURL, clientID, code, verifier)
 
-	harness.RunCLI(t, server.DataDir, "pairing", "disable")
+	harness.RunCLI(t, server, "pairing", "disable")
 
 	// A new client is blocked...
 	assert.False(t, pairs(t, server.AppURL))

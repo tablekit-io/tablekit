@@ -39,6 +39,7 @@ func GenerateToken(t *testing.T, server Server) (tokenID, token string) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), ensureBinary(t), "pairing", "token:generate")
 	cmd.Env = append(os.Environ(), "DATA_DIR="+server.DataDir, "PUBLIC_BASE_URL="+server.AppURL)
+	cmd.Env = append(cmd.Env, server.DBEnv...)
 	out, err := cmd.Output()
 	require.NoError(t, err, "token:generate failed")
 
@@ -57,21 +58,24 @@ func GenerateToken(t *testing.T, server Server) (tokenID, token string) {
 	return tokenID, token
 }
 
-// RunCLI runs the binary with a subcommand against the given data dir.
-func RunCLI(t *testing.T, dataDir string, args ...string) {
+// RunCLI runs the binary with a subcommand against the server's data dir and its
+// own state database (so pairing/token changes hit the same DB the server uses).
+func RunCLI(t *testing.T, server Server, args ...string) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), ensureBinary(t), args...)
-	cmd.Env = append(os.Environ(), "DATA_DIR="+dataDir)
+	cmd.Env = append(os.Environ(), "DATA_DIR="+server.DataDir)
+	cmd.Env = append(cmd.Env, server.DBEnv...)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "cli %v failed: %s", args, out)
 }
 
 // RunCLIOutput runs the binary like RunCLI but returns its stdout, for commands
 // whose output the test needs to parse.
-func RunCLIOutput(t *testing.T, dataDir string, args ...string) string {
+func RunCLIOutput(t *testing.T, server Server, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), ensureBinary(t), args...)
-	cmd.Env = append(os.Environ(), "DATA_DIR="+dataDir)
+	cmd.Env = append(os.Environ(), "DATA_DIR="+server.DataDir)
+	cmd.Env = append(cmd.Env, server.DBEnv...)
 	out, err := cmd.Output()
 	require.NoError(t, err, "cli %v failed", args)
 	return string(out)

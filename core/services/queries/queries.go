@@ -25,7 +25,7 @@ type Descriptor struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Repository persists and loads Descriptors in the SQLite mcp_queries table.
+// Repository persists and loads Descriptors in the mcp_queries table.
 type Repository struct {
 	database *sql.DB
 }
@@ -45,7 +45,7 @@ func (r *Repository) Save(ctx context.Context, database, query, description stri
 	}
 	key := id.String()
 	_, err = r.database.ExecContext(ctx,
-		`INSERT INTO mcp_queries (id, database, sql, description) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO mcp_queries (id, database, sql, description) VALUES ($1, $2, $3, $4)`,
 		key, database, query, description,
 	)
 	if err != nil {
@@ -59,7 +59,7 @@ func (r *Repository) Save(ctx context.Context, database, query, description stri
 // message rather than a server error.
 func (r *Repository) Get(ctx context.Context, id string) (*Descriptor, error) {
 	row := r.database.QueryRowContext(ctx,
-		`SELECT id, database, sql, description, created_at FROM mcp_queries WHERE id = ?`,
+		`SELECT id, database, sql, description, created_at FROM mcp_queries WHERE id = $1`,
 		id,
 	)
 	var descriptor Descriptor
