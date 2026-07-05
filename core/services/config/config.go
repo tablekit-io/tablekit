@@ -52,14 +52,21 @@ func Load() *Config {
 	}
 }
 
-// ResolveDatabasesFile resolves the databases config path by base name, ignoring
-// the extension: given a configured path (from DATABASES_FILE or the default), it
-// accepts either <base>.yaml or <base>.yml, so a mount/env `.yml` vs `.yaml`
-// mismatch still finds the file. If BOTH extensions exist the config is ambiguous
-// and it returns an error (the caller fails startup). If neither exists it returns
-// the configured path unchanged, so the loader treats it as "no databases".
+// ResolveDatabasesFile resolves the databases config path across the two YAML
+// extensions: when the configured path (from DATABASES_FILE or the default) ends
+// in `.yaml` or `.yml`, it accepts either <base>.yaml or <base>.yml, so a
+// mount/env `.yml` vs `.yaml` mismatch still finds the file. If BOTH extensions
+// exist the config is ambiguous and it returns an error (the caller fails
+// startup). If neither exists it returns the configured path unchanged, so the
+// loader treats it as "no databases". A configured path with any other extension
+// (or none) is taken literally — no cross-extension resolution, no ambiguity check.
 func ResolveDatabasesFile(configured string) (string, error) {
-	base := strings.TrimSuffix(strings.TrimSuffix(configured, ".yaml"), ".yml")
+	extension := filepath.Ext(configured)
+	if extension != ".yaml" && extension != ".yml" {
+		return configured, nil
+	}
+
+	base := strings.TrimSuffix(configured, extension)
 	yamlPath := base + ".yaml"
 	ymlPath := base + ".yml"
 

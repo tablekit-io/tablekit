@@ -95,14 +95,28 @@ func TestResolveDatabasesFile(t *testing.T) {
 		assert.Equal(t, configured, resolved)
 	})
 
-	t.Run("configured hint without extension resolves either", func(t *testing.T) {
+	t.Run("configured hint without extension is taken literally", func(t *testing.T) {
 		dir := t.TempDir()
-		ymlPath := filepath.Join(dir, "databases.yml")
-		write(t, ymlPath)
+		// A sibling .yml exists, but the configured path has no YAML extension,
+		// so it must NOT be picked up — the path is used verbatim.
+		write(t, filepath.Join(dir, "databases.yml"))
+		configured := filepath.Join(dir, "databases")
 
-		resolved, err := ResolveDatabasesFile(filepath.Join(dir, "databases"))
+		resolved, err := ResolveDatabasesFile(configured)
 		require.NoError(t, err)
-		assert.Equal(t, ymlPath, resolved)
+		assert.Equal(t, configured, resolved)
+	})
+
+	t.Run("non-YAML extension is taken literally", func(t *testing.T) {
+		dir := t.TempDir()
+		// Even with a sibling .yaml present, a non-YAML extension gets no
+		// cross-extension resolution and no ambiguity check.
+		write(t, filepath.Join(dir, "databases.yaml"))
+		configured := filepath.Join(dir, "databases.conf")
+
+		resolved, err := ResolveDatabasesFile(configured)
+		require.NoError(t, err)
+		assert.Equal(t, configured, resolved)
 	})
 }
 
