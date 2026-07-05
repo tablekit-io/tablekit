@@ -219,6 +219,23 @@ docker compose exec core go test ./e2e/...   # full DB + tunnel + TLS matrix
 Outside that environment they `t.Skip` themselves, so a plain `go test ./...` on
 your host stays green.
 
+### Regenerating the state DB code
+
+TableKit's own state is read and written through [go-jet](https://github.com/go-jet/jet),
+whose typed table/model code (committed under `core/db/gen/`) is **generated from
+the live schema** — go-jet cannot read migration SQL. After changing a migration:
+
+```bash
+docker compose up -d           # core applies the new migration to the dev postgres
+docker compose restart core    # (or restart) so goose runs the migration
+docker compose exec core sh -c \
+  'JET_DSN=postgres://postgres:pw@postgres:5432/tablekit?sslmode=disable go run ./db/gen'
+git add core/db/gen            # commit the regenerated code
+```
+
+`go run ./db/gen` defaults `JET_DSN` to the dev postgres on its host port
+(`localhost:5433`); override it as above when running inside the `core` container.
+
 ### Running e2e tests (throw-away database containers)
 
 The e2e suite spins up disposable Postgres/MySQL containers to test against real
