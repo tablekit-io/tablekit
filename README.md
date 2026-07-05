@@ -98,10 +98,9 @@ Everything is set through the environment.
 | `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
 | `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
 | `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |
-| `DATA_DIR`        | `./data`                   | Where the signing key (`signing.key`) is kept. TableKit's other state (OAuth/pairing, stored queries) now lives in Postgres — see the `DB_*` / `DATABASE_URL` rows below. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | — / `5432` / — / — / `tablekit` / `disable` | Structured connection to TableKit's own state database (Postgres). When `DB_HOST`, `DB_USER` and `DB_PASSWORD` are all set, they take precedence over `DATABASE_URL`. |
 | `DATABASE_URL`    | `postgres://postgres@localhost:5432/tablekit?sslmode=disable` | Full `postgres://` DSN for TableKit's own state database, used when the structured `DB_*` variables above are not all set. |
-| `SIGNING_KEY`     | generated                  | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
+| `SIGNING_KEY`     | **required**               | Base64 HS256 signing key (e.g. `openssl rand -base64 32`). TableKit does not generate one — startup fails if it is unset. Share the same value across instances. Short keys are zero-padded to 32 bytes. |
 | `ACCESS_TTL`      | `15m`                      | Access token lifetime.                          |
 | `REFRESH_TTL`     | `168h`                     | Refresh token lifetime.                         |
 
@@ -156,8 +155,8 @@ Access is gated by pairing rather than a user database, which suits a server
 that's yours alone. State — registered clients and pairing, refresh-token chains
 and CLI bearer tokens, and stored queries — lives in a Postgres database of
 TableKit's own, whose schema is brought up to date automatically on every start
-(embedded goose migrations). The one exception is the signing key, kept as a file
-under `DATA_DIR` (generated on first boot and gitignored).
+(embedded goose migrations). The JWT signing key is not stored: it is supplied
+via the required `SIGNING_KEY` env, so TableKit keeps nothing on local disk.
 
 Each query runs on its own connection, reaching the database directly or through
 a per-database SSH tunnel and/or TLS when configured. Read-only is enforced where

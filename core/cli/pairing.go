@@ -97,14 +97,14 @@ var pairingTokenRevokeCmd = &cobra.Command{
 		if err := appServices.Store.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
 			return err
 		}
-		fmt.Printf("revoked bearer token %s [data dir: %s]\n", tokenID, appServices.Config.DataDir)
+		fmt.Printf("revoked bearer token %s\n", tokenID)
 		return nil
 	},
 }
 
-// applyPairingMode persists the mode to the data dir and prints the result.
-// It targets the same DATA_DIR the server reads, so a running server picks up
-// the change on its next authorize.
+// applyPairingMode persists the mode and prints the result. It writes to the same
+// state database the server reads, so a running server picks up the change on its
+// next authorize.
 func applyPairingMode(ctx context.Context, mode string) error {
 	appServices, err := services.New()
 	if err != nil {
@@ -117,7 +117,7 @@ func applyPairingMode(ctx context.Context, mode string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("pairing mode: %s (%d client(s) paired) [data dir: %s]\n", mode, len(paired), appServices.Config.DataDir)
+	fmt.Printf("pairing mode: %s (%d client(s) paired)\n", mode, len(paired))
 	return nil
 }
 

@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"core/db/dbtest"
-
-	"github.com/stretchr/testify/require"
 )
 
 // TestMain starts one throwaway Postgres for the whole package (skipped where
@@ -16,20 +14,15 @@ func TestMain(m *testing.M) {
 }
 
 // newStore returns a Store backed by a fresh migrated Postgres database (for the
-// oauth_* tables) and a temp dir (for signing.key).
+// oauth_* tables).
 func newStore(t *testing.T) *Store {
 	t.Helper()
-	database := dbtest.New(t)
-	storageService, err := New(t.TempDir(), database)
-	require.NoError(t, err)
-	return storageService
+	return New(dbtest.New(t))
 }
 
-// reopen returns a fresh Store over the same database and directory, to assert
-// state persists across process restarts.
+// reopen returns a fresh Store over the same database, to assert state persists
+// across process restarts.
 func reopen(t *testing.T, s *Store) *Store {
 	t.Helper()
-	reopened, err := New(s.directory, s.database)
-	require.NoError(t, err)
-	return reopened
+	return New(s.database)
 }

@@ -23,6 +23,9 @@ services:
       DB_USER: postgres
       DB_PASSWORD: pw
       DB_NAME: tablekit
+      # SIGNING_KEY is required (no generated fallback). A fixed dev-only base64
+      # HS256 key so the stack boots with zero host config; never use in prod.
+      SIGNING_KEY: dGFibGVraXQtZGV2LXNpZ25pbmcta2V5LTMyYnl0ZXM=
     # host.docker.internal resolves to the host on Docker Desktop natively; the
     # host-gateway mapping gives Linux the same name for the published-port
     # fallback path (see README).

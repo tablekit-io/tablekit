@@ -1,8 +1,8 @@
 package services
 
 import (
+	"encoding/base64"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"core/db/dbtest"
@@ -11,6 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testSigningKey is a fixed base64 HS256 secret (SIGNING_KEY is required). The
+// plaintext is exactly 32 bytes.
+var testSigningKey = base64.StdEncoding.EncodeToString([]byte("tablekit-svc-test-signing-key-32"))
+
 // TestMain starts one throwaway Postgres for the whole package (skipped where
 // docker isn't available); New opens tablekit's own state database.
 func TestMain(m *testing.M) {
@@ -18,10 +22,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewWiresConfigAndStore(t *testing.T) {
-	directory := t.TempDir()
-	t.Setenv("DATA_DIR", directory)
 	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
-	t.Setenv("SIGNING_KEY", "") // force the store-backed key path
+	t.Setenv("SIGNING_KEY", testSigningKey)
 
 	appServices, err := New()
 	require.NoError(t, err)
@@ -31,20 +33,13 @@ func TestNewWiresConfigAndStore(t *testing.T) {
 	require.NotNil(t, appServices.Engine)
 	// The JWT issuer is constructed once here and shared across the app.
 	require.NotNil(t, appServices.Issuer)
-	// Config is loaded from the environment we set above...
-	assert.Equal(t, directory, appServices.Config.DataDir)
-	// ...and the store is opened against that same data dir.
-	_, err = appServices.Store.SigningKey()
-	require.NoError(t, err)
 }
 
-func TestNewFailsOnUnusableDataDir(t *testing.T) {
-	// A reachable database gets New past db.Open, so it reaches the store, which
-	// can't create signing.key's directory under a regular file → New errors.
+func TestNewFailsWithoutSigningKey(t *testing.T) {
+	// A reachable database gets New past db.Open, so it reaches issuer
+	// construction, which requires SIGNING_KEY → New errors when it is empty.
 	t.Setenv("DATABASE_URL", dbtest.NewDSN(t))
-	blocker := filepath.Join(t.TempDir(), "not-a-dir")
-	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
-	t.Setenv("DATA_DIR", filepath.Join(blocker, "sub"))
+	t.Setenv("SIGNING_KEY", "")
 
 	_, err := New()
 	assert.Error(t, err)

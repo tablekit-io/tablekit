@@ -1,6 +1,6 @@
 // Package store is the persistence layer for the OAuth/MCP server. It reads and
 // writes the oauth_* tables in tablekit's Postgres database (schema owned by the
-// db package's goose migrations) and, separately, the HS256 signing key.
+// db package's goose migrations).
 //
 // State that lives in Postgres:
 //   - oauth_clients        registered clients + CLI bearer clients (clients.go)
@@ -9,42 +9,26 @@
 //   - oauth_token_chains   refresh-token lineages                 (tokens.go)
 //   - oauth_bearer_tokens  long-lived CLI bearer tokens           (tokens.go)
 //
-// The one thing not in the database is signing.key: a raw HS256 secret kept as a
-// file under directory, generated on first use (signing.go). The mutex guards
-// only that file; Postgres handles its own concurrency, and the few
-// read-modify-write flows use transactions.
+// The HS256 signing key is not persisted here: it is supplied via the SIGNING_KEY
+// env and decoded by DecodeSigningKey (signing.go). Postgres handles its own
+// concurrency; the mutex only serializes the TryPair read-modify-write.
 package store
 
 import (
 	"database/sql"
-	"os"
-	"path/filepath"
 	"sync"
 )
 
 // Store is the persistence handle. Construct with New.
 type Store struct {
-	// directory holds signing.key; the database holds everything else.
-	directory string
-	database  *sql.DB
-	// mu guards signing.key file access (signing.go) and serializes the TryPair
-	// read-modify-write so concurrent "once" pairings can't both win.
+	database *sql.DB
+	// mu serializes the TryPair read-modify-write so concurrent "once" pairings
+	// can't both win.
 	mu sync.Mutex
 }
 
-// New ensures directory exists (for signing.key) and returns a Store over the
-// given database. The oauth_* schema is brought up by the db package's
-// migrations before this is called; New only normalizes a legacy signing key.
-func New(directory string, database *sql.DB) (*Store, error) {
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return nil, err
-	}
-	s := &Store{directory: directory, database: database}
-	if err := s.migrateLegacySigningKey(); err != nil {
-		return nil, err
-	}
-	return s, nil
+// New returns a Store over the given database. The oauth_* schema is brought up
+// by the db package's migrations before this is called.
+func New(database *sql.DB) *Store {
+	return &Store{database: database}
 }
-
-// path joins directory + name (used for signing.key).
-func (s *Store) path(name string) string { return filepath.Join(s.directory, name) }

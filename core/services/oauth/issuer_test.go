@@ -1,10 +1,10 @@
 package oauth
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -25,11 +25,24 @@ func TestMain(m *testing.M) {
 
 func newIssuer(t *testing.T, configService *config.Config) *Issuer {
 	t.Helper()
-	storageService, err := store.New(t.TempDir(), openTestDB(t))
-	require.NoError(t, err)
-	issuer, err := NewIssuer(configService, storageService)
+	// Give the issuer a signing key if the caller didn't set one. A fresh config
+	// gets a fresh random key, so two issuers built from separate testConfig()
+	// values use different keys (see TestWrongKeyRejected).
+	if configService.SigningKey == "" {
+		configService.SigningKey = randomSigningKey(t)
+	}
+	issuer, err := NewIssuer(configService)
 	require.NoError(t, err)
 	return issuer
+}
+
+// randomSigningKey returns a fresh base64 32-byte HS256 key.
+func randomSigningKey(t *testing.T) string {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(key)
 }
 
 func testConfig() *config.Config {
@@ -172,9 +185,8 @@ func TestExpiredTokenRejected(t *testing.T) {
 }
 
 func TestWrongKeyRejected(t *testing.T) {
-	configService := testConfig()
-	issuer := newIssuer(t, configService)
-	other := newIssuer(t, configService) // different temp dir → different signing key
+	issuer := newIssuer(t, testConfig())
+	other := newIssuer(t, testConfig()) // separate config → fresh random key
 
 	token, err := issuer.IssueAccess("c", "ch", "mcp")
 	require.NoError(t, err)
@@ -208,13 +220,11 @@ func flip(b byte) string {
 	return "A"
 }
 
-// newStore is a small helper for the env-key tests that need the store dir.
-func newStore(t *testing.T) (*store.Store, string) {
+// newStore returns a Store over a fresh migrated Postgres database (used by the
+// bearer-token tests, which persist rows).
+func newStore(t *testing.T) *store.Store {
 	t.Helper()
-	directory := t.TempDir()
-	storageService, err := store.New(directory, openTestDB(t))
-	require.NoError(t, err)
-	return storageService, directory
+	return store.New(openTestDB(t))
 }
 
 // openTestDB returns a fresh migrated Postgres database, dropped at test end.
@@ -231,12 +241,10 @@ func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {
 	configService := testConfig()
 	configService.SigningKey = base64.StdEncoding.EncodeToString(key)
 
-	// Two issuers, different stores, same external key → cross-verify.
-	storageServiceA, _ := newStore(t)
-	storageServiceB, _ := newStore(t)
-	issuerA, err := NewIssuer(configService, storageServiceA)
+	// Two issuers, same external key → cross-verify.
+	issuerA, err := NewIssuer(configService)
 	require.NoError(t, err)
-	issuerB, err := NewIssuer(configService, storageServiceB)
+	issuerB, err := NewIssuer(configService)
 	require.NoError(t, err)
 
 	token, err := issuerA.IssueAccess("c", "ch", "mcp")
@@ -250,8 +258,7 @@ func TestEnvSigningKeyShortIsPadded(t *testing.T) {
 	configService := testConfig()
 	configService.SigningKey = base64.StdEncoding.EncodeToString([]byte("short-key"))
 
-	storageService, _ := newStore(t)
-	issuer, err := NewIssuer(configService, storageService)
+	issuer, err := NewIssuer(configService)
 	require.NoError(t, err)
 
 	token, err := issuer.IssueAccess("c", "ch", "mcp")
@@ -264,19 +271,13 @@ func TestEnvSigningKeyInvalidRejected(t *testing.T) {
 	configService := testConfig()
 	configService.SigningKey = "!!! not base64 !!!"
 
-	storageService, _ := newStore(t)
-	_, err := NewIssuer(configService, storageService)
+	_, err := NewIssuer(configService)
 	assert.Error(t, err)
 }
 
-func TestEnvSigningKeyDoesNotWriteFile(t *testing.T) {
-	configService := testConfig()
-	configService.SigningKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
+func TestMissingSigningKeyRejected(t *testing.T) {
+	configService := testConfig() // SigningKey empty
 
-	storageService, directory := newStore(t)
-	_, err := NewIssuer(configService, storageService)
-	require.NoError(t, err)
-
-	// Env key takes precedence; the store's key file is never created.
-	assert.NoFileExists(t, filepath.Join(directory, "signing.key"))
+	_, err := NewIssuer(configService)
+	assert.Error(t, err, "a missing SIGNING_KEY must fail issuer construction")
 }

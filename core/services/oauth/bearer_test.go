@@ -10,7 +10,7 @@ import (
 )
 
 func TestMintBearer(t *testing.T) {
-	storageService, _ := newStore(t)
+	storageService := newStore(t)
 	issuer := newIssuer(t, testConfig())
 	ctx := context.Background()
 

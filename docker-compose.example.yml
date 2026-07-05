@@ -17,16 +17,14 @@ services:
       DB_PASSWORD: "${DB_PASSWORD:-pw}"
       DB_NAME: tablekit
 
-      # DATA_DIR now holds only signing.key (a raw secret). (see volumes)
-      DATA_DIR: /data
-
       # Where the databases config is read from. Resolved by base name, so either
       # /app/databases.yaml or /app/databases.yml is accepted
       DATABASES_FILE: "${DATABASES_FILE:-/app/databases.yaml}"
 
-      # Set to share one HS256 key across instances; By default: generated and
-      # persisted under DATA_DIR.
-      SIGNING_KEY: "${SIGNING_KEY:-}"
+      # Required base64 HS256 signing key — TableKit does not generate one, so
+      # `up` fails loudly if it is unset. Generate with `openssl rand -base64 32`
+      # and share the same value across instances.
+      SIGNING_KEY: "${SIGNING_KEY:?set SIGNING_KEY (openssl rand -base64 32)}"
 
     ports:
       # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
@@ -40,11 +38,6 @@ services:
         protocol: tcp
 
     volumes:
-      # Persists TableKit's own state.
-      - type: bind
-        source: ./data
-        target: /data
-
       # Your database connectors (see databases.example.yml for reference). Create
       # this file first (e.g. `cp databases.example.yml databases.yml`)
       - type: bind

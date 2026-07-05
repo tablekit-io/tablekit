@@ -44,19 +44,14 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 
-# Run as a non-root user; DATA_DIR lives in a volume owned by it.
-RUN useradd --system --uid 10001 tablekit \
- && mkdir -p /data \
- && chown tablekit:tablekit /data
+# Run as a non-root user. TableKit keeps no state on disk: its own state lives in
+# Postgres and the signing key comes from the SIGNING_KEY env, so there is no data
+# volume.
+RUN useradd --system --uid 10001 tablekit
 
 COPY --from=build /tablekit /usr/local/bin/tablekit
 
 USER tablekit
-
-# TableKit's own state lives in Postgres now; DATA_DIR holds only signing.key.
-ENV DATA_DIR=/data
-
-VOLUME ["/data"]
 
 # 8080: MCP (/mcp) + OAuth. 8081: control (/health).
 EXPOSE 8080 8081

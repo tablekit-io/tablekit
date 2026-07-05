@@ -1,13 +1,15 @@
 // Package harness is the shared support code for the e2e test packages
 // (oauth, mcp, database). It drives the real compiled `tablekit` binary over
 // HTTP: it builds the binary once per process (lazily), starts servers on random
-// free ports with isolated data dirs, and offers OAuth/bearer/MCP/Docker helpers.
+// free ports against throwaway state databases, and offers OAuth/bearer/MCP/Docker
+// helpers.
 //
 // It is a normal (non-test) package so the test packages can import it; it takes
 // *testing.T and imports testing, which is fine for test-support code.
 package harness
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,6 +32,12 @@ var (
 	binPath   string
 	buildErr  error
 )
+
+// signingKey is the fixed HS256 secret the e2e server and CLI helpers share via
+// SIGNING_KEY, so a token minted by one process verifies in the other. The value
+// is arbitrary; the server just requires SIGNING_KEY to be set. The plaintext is
+// exactly 32 bytes, so it decodes to a full-length key with no padding.
+var signingKey = base64.StdEncoding.EncodeToString([]byte("tablekit-e2e-test-signing-key-32"))
 
 // moduleRoot returns core/ — three dirs up from this file (core/e2e/harness/harness.go).
 func moduleRoot() string {
@@ -77,7 +85,6 @@ func ensureBinary(t *testing.T) string {
 type Server struct {
 	AppURL     string
 	ControlURL string
-	DataDir    string
 	// DBEnv is the DB_* environment pointing at this server's own state database.
 	// CLI helpers (RunCLI, GenerateToken) must pass it so they hit the same
 	// database the server does.
@@ -99,7 +106,6 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	RequireDocker(t)
 	bin := ensureBinary(t)
 	appPort, controlPort := freePort(t), freePort(t)
-	dataDir := t.TempDir()
 	appURL := fmt.Sprintf("http://127.0.0.1:%d", appPort)
 	controlURL := fmt.Sprintf("http://127.0.0.1:%d", controlPort)
 
@@ -107,7 +113,7 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("APP_PORT=%d", appPort),
 		fmt.Sprintf("CONTROL_PORT=%d", controlPort),
-		"DATA_DIR="+dataDir,
+		"SIGNING_KEY="+signingKey,
 		"PUBLIC_BASE_URL="+appURL,
 	)
 	stateDBEnv := startStateDB(t)
@@ -121,7 +127,7 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	})
 
 	waitHealthy(t, controlURL)
-	return Server{AppURL: appURL, ControlURL: controlURL, DataDir: dataDir, DBEnv: stateDBEnv}
+	return Server{AppURL: appURL, ControlURL: controlURL, DBEnv: stateDBEnv}
 }
 
 // startStateDB starts a throwaway Postgres for the server's own state and returns

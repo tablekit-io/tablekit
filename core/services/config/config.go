@@ -23,12 +23,9 @@ type Config struct {
 	// advertised as the OAuth issuer and used to build endpoint URLs, so it
 	// must match what clients actually dial. No trailing slash.
 	PublicBaseURL string
-	// DataDir holds the signing key (signing.key). The rest of tablekit's own
-	// state now lives in Postgres; only this raw secret stays a file.
-	DataDir string
 	// DatabasesFile is the YAML file declaring the databases run_query can query.
-	// Defaults to ./databases.yaml (relative to the working directory, not
-	// DATA_DIR); a missing file means no databases.
+	// Defaults to ./databases.yaml (relative to the working directory); a missing
+	// file means no databases.
 	DatabasesFile string
 	// DatabaseURL is a full postgres:// DSN for tablekit's own state database. It
 	// is used only when the structured DB_* variables below are not all set (see
@@ -43,9 +40,9 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
-	// SigningKey, if set, is a base64-encoded HS256 secret supplied externally;
-	// it takes precedence over the generated DATA_DIR/signing.key. Shorter keys
-	// are zero-padded to 32 bytes.
+	// SigningKey is the required base64-encoded HS256 secret (SIGNING_KEY). It is
+	// supplied externally — there is no generated fallback — so startup fails if
+	// it is empty. Shorter keys are zero-padded to 32 bytes.
 	SigningKey string
 	// AccessTTL is how long an access token is valid.
 	AccessTTL time.Duration
@@ -55,12 +52,10 @@ type Config struct {
 
 // Load reads configuration from the environment, applying defaults.
 func Load() *Config {
-	dataDir := envOrDefault("DATA_DIR", "./data")
 	return &Config{
 		AppPort:       envOrDefault("APP_PORT", "8080"),
 		ControlPort:   envOrDefault("CONTROL_PORT", "8081"),
 		PublicBaseURL: strings.TrimRight(envOrDefault("PUBLIC_BASE_URL", "http://localhost:8080"), "/"),
-		DataDir:       dataDir,
 		DatabasesFile: envOrDefault("DATABASES_FILE", "databases.yaml"),
 		DatabaseURL:   os.Getenv("DATABASE_URL"),
 		DBHost:        os.Getenv("DB_HOST"),

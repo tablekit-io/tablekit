@@ -4,6 +4,7 @@
 package oauth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,16 +72,14 @@ func init() {
 	jwt.TimePrecision = time.Microsecond
 }
 
-// NewIssuer resolves the signing key: an externally provided base64 key
-// (config.SigningKey) wins, otherwise the store's generated/persisted key is used.
-func NewIssuer(configService *config.Config, storageService *store.Store) (*Issuer, error) {
-	var key []byte
-	var err error
-	if configService.SigningKey != "" {
-		key, err = store.DecodeSigningKey(configService.SigningKey)
-	} else {
-		key, err = storageService.SigningKey()
+// NewIssuer resolves the signing key from the required SIGNING_KEY env
+// (config.SigningKey): a base64-encoded HS256 secret. It is mandatory — there is
+// no generated fallback — so a missing key fails startup with a clear message.
+func NewIssuer(configService *config.Config) (*Issuer, error) {
+	if configService.SigningKey == "" {
+		return nil, errors.New("SIGNING_KEY is required (base64 HS256 secret); generate one with `openssl rand -base64 32`")
 	}
+	key, err := store.DecodeSigningKey(configService.SigningKey)
 	if err != nil {
 		return nil, err
 	}

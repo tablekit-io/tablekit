@@ -30,16 +30,13 @@ type Services struct {
 // configured databases.
 func New() (*Services, error) {
 	configService := config.Load()
-	// Open the Postgres database first: the store persists its OAuth state in it
-	// (only signing.key stays a file under DataDir).
+	// Open the Postgres database first: the store persists all of its OAuth state
+	// in it (the signing key lives only in the SIGNING_KEY env, not on disk).
 	database, err := db.Open(configService.DatabaseDSN())
 	if err != nil {
 		return nil, err
 	}
-	storageService, err := store.New(configService.DataDir, database)
-	if err != nil {
-		return nil, err
-	}
+	storageService := store.New(database)
 	// Resolve .yaml/.yml by base name (dies if both exist), then remember the
 	// resolved path so the app reports what it actually loaded.
 	resolvedDatabasesFile, err := config.ResolveDatabasesFile(configService.DatabasesFile)
@@ -55,7 +52,7 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
-	issuer, err := oauth.NewIssuer(configService, storageService)
+	issuer, err := oauth.NewIssuer(configService)
 	if err != nil {
 		return nil, err
 	}
