@@ -29,7 +29,11 @@ func TestNewWiresConfigAndStore(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, appServices.Config)
-	require.NotNil(t, appServices.Store)
+	require.NotNil(t, appServices.Clients)
+	require.NotNil(t, appServices.AuthCodes)
+	require.NotNil(t, appServices.TokenChains)
+	require.NotNil(t, appServices.BearerTokens)
+	require.NotNil(t, appServices.Pairing)
 	require.NotNil(t, appServices.Engine)
 	// The JWT issuer is constructed once here and shared across the app.
 	require.NotNil(t, appServices.Issuer)

@@ -81,8 +81,8 @@ func assertMode(t *testing.T, want string) {
 	database, err := db.Open(os.Getenv("DATABASE_URL"))
 	require.NoError(t, err)
 	t.Cleanup(func() { database.Close() })
-	storageService := store.New(database)
-	mode, _, err := storageService.PairingStatus(context.Background())
+	pairing := store.NewPairingRepository(database)
+	mode, _, err := pairing.PairingStatus(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, want, mode)
 }

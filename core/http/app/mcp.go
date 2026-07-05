@@ -26,7 +26,7 @@ func MCPRoute(appServices *services.Services) http.Handler {
 			if err != nil {
 				return nil, auth.ErrInvalidToken
 			}
-			bearerToken, err := appServices.Store.GetBearerToken(ctx, claims.ID)
+			bearerToken, err := appServices.BearerTokens.GetBearerToken(ctx, claims.ID)
 			if err != nil || bearerToken == nil || bearerToken.Revoked {
 				return nil, auth.ErrInvalidToken
 			}

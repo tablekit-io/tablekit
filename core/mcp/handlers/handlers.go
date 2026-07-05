@@ -20,13 +20,13 @@ import (
 // and wire with Register.
 type Handlers struct {
 	Engine        *engine.Service
-	Queries       *queries.Repository
+	Queries       queries.QueryRepository
 	Issuer        *oauth.Issuer
 	PublicBaseURL string
 }
 
 // New wires the MCP tool handlers to their dependencies.
-func New(engineService *engine.Service, queriesRepo *queries.Repository, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
+func New(engineService *engine.Service, queriesRepo queries.QueryRepository, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
 	return &Handlers{
 		Engine:        engineService,
 		Queries:       queriesRepo,

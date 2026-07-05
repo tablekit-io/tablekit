@@ -60,7 +60,7 @@ var pairingTokenGenerateCmd = &cobra.Command{
 			return err
 		}
 
-		minted, err := oauth.MintBearer(cmd.Context(), appServices.Store, appServices.Issuer)
+		minted, err := oauth.MintBearer(cmd.Context(), appServices.Clients, appServices.BearerTokens, appServices.Issuer)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ var pairingTokenRevokeCmd = &cobra.Command{
 			tokenID = id
 		}
 
-		if err := appServices.Store.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
+		if err := appServices.BearerTokens.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
 			return err
 		}
 		fmt.Printf("revoked bearer token %s\n", tokenID)
@@ -110,10 +110,10 @@ func applyPairingMode(ctx context.Context, mode string) error {
 	if err != nil {
 		return err
 	}
-	if err := appServices.Store.SetPairingMode(ctx, mode); err != nil {
+	if err := appServices.Pairing.SetPairingMode(ctx, mode); err != nil {
 		return err
 	}
-	_, paired, err := appServices.Store.PairingStatus(ctx)
+	_, paired, err := appServices.Pairing.PairingStatus(ctx)
 	if err != nil {
 		return err
 	}

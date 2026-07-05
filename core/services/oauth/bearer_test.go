@@ -5,16 +5,20 @@ import (
 	"strings"
 	"testing"
 
+	"core/services/store"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMintBearer(t *testing.T) {
-	storageService := newStore(t)
+	database := openTestDB(t)
+	clients := store.NewClientRepository(database)
+	tokens := store.NewBearerTokenRepository(database)
 	issuer := newIssuer(t, testConfig())
 	ctx := context.Background()
 
-	minted, err := MintBearer(ctx, storageService, issuer)
+	minted, err := MintBearer(ctx, clients, tokens, issuer)
 	require.NoError(t, err)
 
 	// The handed-out token is prefixed and carries the returned id/expiry.
@@ -23,7 +27,7 @@ func TestMintBearer(t *testing.T) {
 	assert.False(t, minted.ExpiresAt.IsZero())
 
 	// The token row is persisted, retrievable by id, and not revoked.
-	row, err := storageService.GetBearerToken(ctx, minted.ID)
+	row, err := tokens.GetBearerToken(ctx, minted.ID)
 	require.NoError(t, err)
 	require.NotNil(t, row)
 	assert.False(t, row.Revoked)

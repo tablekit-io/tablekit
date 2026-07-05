@@ -2,10 +2,18 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
+
+	"database/sql"
+
+	"core/db/gen/tablekit/public/model"
+	"core/db/gen/tablekit/public/table"
+
+	"github.com/go-jet/jet/v2/qrm"
+
+	. "github.com/go-jet/jet/v2/postgres"
 )
 
 // AuthCode is a one-time authorization code bound to a PKCE challenge.
@@ -47,15 +55,35 @@ type BearerToken struct {
 
 // ---- auth codes ---------------------------------------------------------
 
+// AuthCodeRepository persists one-time PKCE authorization codes.
+type AuthCodeRepository interface {
+	PutCode(ctx context.Context, c *AuthCode) error
+	ConsumeCode(ctx context.Context, code string) (*AuthCode, error)
+}
+
+type authCodeRepository struct {
+	database *sql.DB
+}
+
+// NewAuthCodeRepository returns an AuthCodeRepository over the given database.
+func NewAuthCodeRepository(database *sql.DB) AuthCodeRepository {
+	return &authCodeRepository{database: database}
+}
+
 // PutCode stores a one-time authorization code.
-func (s *Store) PutCode(ctx context.Context, c *AuthCode) error {
-	_, err := s.database.ExecContext(ctx,
-		`INSERT INTO oauth_auth_codes
-		 (code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		c.Code, c.ClientID, c.RedirectURI, c.CodeChallenge, c.Scope, c.UserID, c.ExpiresAt,
-	)
-	if err != nil {
+func (r *authCodeRepository) PutCode(ctx context.Context, c *AuthCode) error {
+	stmt := table.OAuthAuthCodes.
+		INSERT(table.OAuthAuthCodes.AllColumns).
+		MODEL(model.OAuthAuthCodes{
+			Code:          c.Code,
+			ClientID:      c.ClientID,
+			RedirectURI:   c.RedirectURI,
+			CodeChallenge: c.CodeChallenge,
+			Scope:         c.Scope,
+			UserID:        c.UserID,
+			ExpiresAt:     c.ExpiresAt,
+		})
+	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("put auth code: %w", err)
 	}
 	return nil
@@ -64,84 +92,129 @@ func (s *Store) PutCode(ctx context.Context, c *AuthCode) error {
 // ConsumeCode atomically fetches and deletes a code (single use). Returns nil if
 // the code is unknown/already used. The SELECT + DELETE run in a transaction so
 // two redemptions of the same code cannot both succeed.
-func (s *Store) ConsumeCode(ctx context.Context, code string) (*AuthCode, error) {
-	tx, err := s.database.BeginTx(ctx, nil)
+func (r *authCodeRepository) ConsumeCode(ctx context.Context, code string) (*AuthCode, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	var c AuthCode
-	err = tx.QueryRowContext(ctx,
-		`SELECT code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at
-		 FROM oauth_auth_codes WHERE code = $1`, code,
-	).Scan(&c.Code, &c.ClientID, &c.RedirectURI, &c.CodeChallenge, &c.Scope, &c.UserID, &c.ExpiresAt)
-	if errors.Is(err, sql.ErrNoRows) {
+	var row model.OAuthAuthCodes
+	err = SELECT(table.OAuthAuthCodes.AllColumns).
+		FROM(table.OAuthAuthCodes).
+		WHERE(table.OAuthAuthCodes.Code.EQ(String(code))).
+		QueryContext(ctx, tx, &row)
+	if errors.Is(err, qrm.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read auth code: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_auth_codes WHERE code = $1`, code); err != nil {
+
+	if _, err := table.OAuthAuthCodes.
+		DELETE().
+		WHERE(table.OAuthAuthCodes.Code.EQ(String(code))).
+		ExecContext(ctx, tx); err != nil {
 		return nil, fmt.Errorf("consume auth code: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &c, nil
+	return &AuthCode{
+		Code:          row.Code,
+		ClientID:      row.ClientID,
+		RedirectURI:   row.RedirectURI,
+		CodeChallenge: row.CodeChallenge,
+		Scope:         row.Scope,
+		UserID:        row.UserID,
+		ExpiresAt:     row.ExpiresAt,
+	}, nil
 }
 
 // ---- chains -------------------------------------------------------------
 
+// TokenChainRepository persists refresh-token lineages.
+type TokenChainRepository interface {
+	NewChain(ctx context.Context, c *Chain) error
+	GetChain(ctx context.Context, id string) (*Chain, error)
+	BumpCutoff(ctx context.Context, id string, t time.Time) error
+	RevokeChain(ctx context.Context, id string) error
+}
+
+type tokenChainRepository struct {
+	database *sql.DB
+}
+
+// NewTokenChainRepository returns a TokenChainRepository over the given database.
+func NewTokenChainRepository(database *sql.DB) TokenChainRepository {
+	return &tokenChainRepository{database: database}
+}
+
 // NewChain persists a fresh refresh-token chain.
-func (s *Store) NewChain(ctx context.Context, c *Chain) error {
-	_, err := s.database.ExecContext(ctx,
-		`INSERT INTO oauth_token_chains
-		 (id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		c.ID, c.ClientID, c.UserID, c.Scope, c.RedirectURI, c.Revoked, c.InvalidatedBefore, c.CreatedAt,
-	)
-	if err != nil {
+func (r *tokenChainRepository) NewChain(ctx context.Context, c *Chain) error {
+	stmt := table.OAuthTokenChains.
+		INSERT(table.OAuthTokenChains.AllColumns).
+		MODEL(model.OAuthTokenChains{
+			ID:                c.ID,
+			ClientID:          c.ClientID,
+			UserID:            c.UserID,
+			Scope:             c.Scope,
+			RedirectURI:       c.RedirectURI,
+			Revoked:           c.Revoked,
+			InvalidatedBefore: c.InvalidatedBefore,
+			CreatedAt:         c.CreatedAt,
+		})
+	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("new chain: %w", err)
 	}
 	return nil
 }
 
 // GetChain returns the chain by id, or nil if unknown.
-func (s *Store) GetChain(ctx context.Context, id string) (*Chain, error) {
-	row := s.database.QueryRowContext(ctx,
-		`SELECT id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at
-		 FROM oauth_token_chains WHERE id = $1`, id,
-	)
-	var c Chain
-	err := row.Scan(&c.ID, &c.ClientID, &c.UserID, &c.Scope, &c.RedirectURI,
-		&c.Revoked, &c.InvalidatedBefore, &c.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
+func (r *tokenChainRepository) GetChain(ctx context.Context, id string) (*Chain, error) {
+	stmt := SELECT(table.OAuthTokenChains.AllColumns).
+		FROM(table.OAuthTokenChains).
+		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+
+	var row model.OAuthTokenChains
+	err := stmt.QueryContext(ctx, r.database, &row)
+	if errors.Is(err, qrm.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get chain %q: %w", id, err)
 	}
-	return &c, nil
+	return &Chain{
+		ID:                row.ID,
+		ClientID:          row.ClientID,
+		UserID:            row.UserID,
+		Scope:             row.Scope,
+		RedirectURI:       row.RedirectURI,
+		Revoked:           row.Revoked,
+		InvalidatedBefore: row.InvalidatedBefore,
+		CreatedAt:         row.CreatedAt,
+	}, nil
 }
 
 // BumpCutoff advances a chain's InvalidatedBefore to t (rotation).
-func (s *Store) BumpCutoff(ctx context.Context, id string, t time.Time) error {
-	_, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_token_chains SET invalidated_before = $1 WHERE id = $2`, t, id,
-	)
-	if err != nil {
+func (r *tokenChainRepository) BumpCutoff(ctx context.Context, id string, t time.Time) error {
+	stmt := table.OAuthTokenChains.
+		UPDATE(table.OAuthTokenChains.InvalidatedBefore).
+		SET(TimestampzT(t)).
+		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("bump chain cutoff %q: %w", id, err)
 	}
 	return nil
 }
 
 // RevokeChain marks a chain revoked (replay detected / logout).
-func (s *Store) RevokeChain(ctx context.Context, id string) error {
-	_, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_token_chains SET revoked = TRUE WHERE id = $1`, id,
-	)
-	if err != nil {
+func (r *tokenChainRepository) RevokeChain(ctx context.Context, id string) error {
+	stmt := table.OAuthTokenChains.
+		UPDATE(table.OAuthTokenChains.Revoked).
+		SET(Bool(true)).
+		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("revoke chain %q: %w", id, err)
 	}
 	return nil
@@ -149,42 +222,70 @@ func (s *Store) RevokeChain(ctx context.Context, id string) error {
 
 // ---- bearer tokens ------------------------------------------------------
 
+// BearerTokenRepository persists CLI-minted long-lived bearer tokens.
+type BearerTokenRepository interface {
+	PutBearerToken(ctx context.Context, t *BearerToken) error
+	GetBearerToken(ctx context.Context, id string) (*BearerToken, error)
+	RevokeBearerToken(ctx context.Context, id string) error
+}
+
+type bearerTokenRepository struct {
+	database *sql.DB
+}
+
+// NewBearerTokenRepository returns a BearerTokenRepository over the given database.
+func NewBearerTokenRepository(database *sql.DB) BearerTokenRepository {
+	return &bearerTokenRepository{database: database}
+}
+
 // PutBearerToken persists a CLI-minted bearer token.
-func (s *Store) PutBearerToken(ctx context.Context, t *BearerToken) error {
-	_, err := s.database.ExecContext(ctx,
-		`INSERT INTO oauth_bearer_tokens (id, client_id, revoked, created_at, expires_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		t.ID, t.ClientID, t.Revoked, t.CreatedAt, t.ExpiresAt,
-	)
-	if err != nil {
+func (r *bearerTokenRepository) PutBearerToken(ctx context.Context, t *BearerToken) error {
+	stmt := table.OAuthBearerTokens.
+		INSERT(table.OAuthBearerTokens.AllColumns).
+		MODEL(model.OAuthBearerTokens{
+			ID:        t.ID,
+			ClientID:  t.ClientID,
+			Revoked:   t.Revoked,
+			CreatedAt: t.CreatedAt,
+			ExpiresAt: t.ExpiresAt,
+		})
+	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("put bearer token: %w", err)
 	}
 	return nil
 }
 
 // GetBearerToken returns the bearer token by id, or nil if unknown.
-func (s *Store) GetBearerToken(ctx context.Context, id string) (*BearerToken, error) {
-	row := s.database.QueryRowContext(ctx,
-		`SELECT id, client_id, revoked, created_at, expires_at
-		 FROM oauth_bearer_tokens WHERE id = $1`, id,
-	)
-	var t BearerToken
-	err := row.Scan(&t.ID, &t.ClientID, &t.Revoked, &t.CreatedAt, &t.ExpiresAt)
-	if errors.Is(err, sql.ErrNoRows) {
+func (r *bearerTokenRepository) GetBearerToken(ctx context.Context, id string) (*BearerToken, error) {
+	stmt := SELECT(table.OAuthBearerTokens.AllColumns).
+		FROM(table.OAuthBearerTokens).
+		WHERE(table.OAuthBearerTokens.ID.EQ(String(id)))
+
+	var row model.OAuthBearerTokens
+	err := stmt.QueryContext(ctx, r.database, &row)
+	if errors.Is(err, qrm.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get bearer token %q: %w", id, err)
 	}
-	return &t, nil
+	return &BearerToken{
+		ID:        row.ID,
+		ClientID:  row.ClientID,
+		Revoked:   row.Revoked,
+		CreatedAt: row.CreatedAt,
+		ExpiresAt: row.ExpiresAt,
+	}, nil
 }
 
 // RevokeBearerToken marks a bearer token revoked. It returns an error if the id
 // is unknown, so the CLI can tell the user nothing was revoked.
-func (s *Store) RevokeBearerToken(ctx context.Context, id string) error {
-	result, err := s.database.ExecContext(ctx,
-		`UPDATE oauth_bearer_tokens SET revoked = TRUE WHERE id = $1`, id,
-	)
+func (r *bearerTokenRepository) RevokeBearerToken(ctx context.Context, id string) error {
+	result, err := table.OAuthBearerTokens.
+		UPDATE(table.OAuthBearerTokens.Revoked).
+		SET(Bool(true)).
+		WHERE(table.OAuthBearerTokens.ID.EQ(String(id))).
+		ExecContext(ctx, r.database)
 	if err != nil {
 		return fmt.Errorf("revoke bearer token %q: %w", id, err)
 	}

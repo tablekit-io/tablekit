@@ -21,12 +21,12 @@ type MintedBearer struct {
 // records the token row. A bearer token registers as its own client: no redirect
 // URIs, no name. The returned Token is already prefixed (TokenPrefix) and ready
 // to hand out.
-func MintBearer(ctx context.Context, st *store.Store, iss *Issuer) (MintedBearer, error) {
+func MintBearer(ctx context.Context, clients store.ClientRepository, tokens store.BearerTokenRepository, iss *Issuer) (MintedBearer, error) {
 	clientID := uuid.NewString()
 	tokenID := uuid.NewString()
 	now := time.Now()
 
-	if err := st.SaveClient(ctx, &store.Client{
+	if err := clients.SaveClient(ctx, &store.Client{
 		ClientID:     clientID,
 		ClientName:   nil,
 		RedirectURIs: []string{},
@@ -40,7 +40,7 @@ func MintBearer(ctx context.Context, st *store.Store, iss *Issuer) (MintedBearer
 	if err != nil {
 		return MintedBearer{}, err
 	}
-	if err := st.PutBearerToken(ctx, &store.BearerToken{
+	if err := tokens.PutBearerToken(ctx, &store.BearerToken{
 		ID:        tokenID,
 		ClientID:  clientID,
 		CreatedAt: now,

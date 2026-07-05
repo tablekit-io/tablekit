@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 
 // newRepository opens a fresh migrated Postgres database and returns a repository
 // over it. The database is dropped when the test ends.
-func newRepository(t *testing.T) *queries.Repository {
+func newRepository(t *testing.T) queries.QueryRepository {
 	t.Helper()
 	return queries.New(dbtest.New(t))
 }

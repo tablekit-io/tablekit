@@ -16,14 +16,19 @@ import (
 	"core/services/store"
 )
 
-// Services holds the shared services every layer needs.
+// Services holds the shared services every layer needs. The store aggregate is
+// exposed as one repository per concern rather than a single handle.
 type Services struct {
-	Config  *config.Config
-	Store   *store.Store
-	Engine  *engine.Service
-	Issuer  *oauth.Issuer
-	DB      *sql.DB
-	Queries *queries.Repository
+	Config       *config.Config
+	Clients      store.ClientRepository
+	AuthCodes    store.AuthCodeRepository
+	TokenChains  store.TokenChainRepository
+	BearerTokens store.BearerTokenRepository
+	Pairing      store.PairingRepository
+	Engine       *engine.Service
+	Issuer       *oauth.Issuer
+	DB           *sql.DB
+	Queries      queries.QueryRepository
 }
 
 // New loads config from the environment, opens the on-disk store, and loads the
@@ -36,7 +41,6 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
-	storageService := store.New(database)
 	// Resolve .yaml/.yml by base name (dies if both exist), then remember the
 	// resolved path so the app reports what it actually loaded.
 	resolvedDatabasesFile, err := config.ResolveDatabasesFile(configService.DatabasesFile)
@@ -57,12 +61,16 @@ func New() (*Services, error) {
 		return nil, err
 	}
 	return &Services{
-		Config:  configService,
-		Store:   storageService,
-		Engine:  engineService,
-		Issuer:  issuer,
-		DB:      database,
-		Queries: queries.New(database),
+		Config:       configService,
+		Clients:      store.NewClientRepository(database),
+		AuthCodes:    store.NewAuthCodeRepository(database),
+		TokenChains:  store.NewTokenChainRepository(database),
+		BearerTokens: store.NewBearerTokenRepository(database),
+		Pairing:      store.NewPairingRepository(database),
+		Engine:       engineService,
+		Issuer:       issuer,
+		DB:           database,
+		Queries:      queries.New(database),
 	}, nil
 }
 

@@ -11,7 +11,6 @@ import (
 
 	"core/db/dbtest"
 	"core/services/config"
-	"core/services/store"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -218,13 +217,6 @@ func flip(b byte) string {
 		return "B"
 	}
 	return "A"
-}
-
-// newStore returns a Store over a fresh migrated Postgres database (used by the
-// bearer-token tests, which persist rows).
-func newStore(t *testing.T) *store.Store {
-	t.Helper()
-	return store.New(openTestDB(t))
 }
 
 // openTestDB returns a fresh migrated Postgres database, dropped at test end.

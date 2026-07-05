@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"testing"
 
@@ -13,16 +14,10 @@ func TestMain(m *testing.M) {
 	os.Exit(dbtest.Main(m))
 }
 
-// newStore returns a Store backed by a fresh migrated Postgres database (for the
-// oauth_* tables).
-func newStore(t *testing.T) *Store {
+// newDB returns a fresh migrated Postgres database for a test. Each repository is
+// built over it directly; a second repository over the same handle stands in for
+// a process restart (state persists in Postgres, not the repository).
+func newDB(t *testing.T) *sql.DB {
 	t.Helper()
-	return New(dbtest.New(t))
-}
-
-// reopen returns a fresh Store over the same database, to assert state persists
-// across process restarts.
-func reopen(t *testing.T, s *Store) *Store {
-	t.Helper()
-	return New(s.database)
+	return dbtest.New(t)
 }
