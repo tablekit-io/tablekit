@@ -25,7 +25,7 @@ func TestSaveThenGet(t *testing.T) {
 	repository := newRepository(t)
 	ctx := context.Background()
 
-	key, err := repository.Save(ctx, "emerald", "SELECT 1", "a trivial probe")
+	key, err := repository.Save(ctx, "cafe", "SELECT 1", "a trivial probe")
 	require.NoError(t, err)
 	require.NotEmpty(t, key)
 
@@ -33,7 +33,7 @@ func TestSaveThenGet(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, key, got.ID)
-	assert.Equal(t, "emerald", got.Database)
+	assert.Equal(t, "cafe", got.Database)
 	assert.Equal(t, "SELECT 1", got.SQL)
 	assert.Equal(t, "a trivial probe", got.Description)
 	assert.False(t, got.CreatedAt.IsZero(), "created_at should be set by the default")
@@ -51,9 +51,9 @@ func TestSaveGeneratesDistinctKeys(t *testing.T) {
 	repository := newRepository(t)
 	ctx := context.Background()
 
-	first, err := repository.Save(ctx, "emerald", "SELECT 1", "one")
+	first, err := repository.Save(ctx, "cafe", "SELECT 1", "one")
 	require.NoError(t, err)
-	second, err := repository.Save(ctx, "emerald", "SELECT 1", "two")
+	second, err := repository.Save(ctx, "cafe", "SELECT 1", "two")
 	require.NoError(t, err)
 
 	assert.NotEqual(t, first, second)

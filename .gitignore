@@ -19,3 +19,7 @@ core/mcp/ui/widgets/manifest.json
 /data
 /databases.example.yml
 /docker-compose.example.yml
+
+# Generated cafe sample data (produced by generate_cafe_data.go; regenerated
+# on demand by the e2e tests). Committed generator, ignored output.
+core/e2e/database/test-data/cafe_data.sql

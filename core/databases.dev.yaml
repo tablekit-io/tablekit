@@ -1,13 +1,13 @@
 # yaml-language-server: $schema=./engine/config/schemas/databases.schema.json
-# Dev-only: points at the postgres service in docker-compose.yml (emerald DB).
+# Dev-only: points at the postgres service in docker-compose.yml (cafe DB).
 # Wired in via DATABASES_FILE=/app/databases.dev.yaml in the core service.
 databases:
-  emerald:
+  cafe:
     type: postgres
     details:
       host: postgres        # docker-compose service name on the tablekit network
       port: 5432
-      database: emerald
+      database: cafe
       username: postgres
       password: pw
       # The dev postgres container has SSL off; TLS defaults to disabled, so no

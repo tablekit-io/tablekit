@@ -82,7 +82,7 @@ func dbCases() []dbCase {
 	return []dbCase{
 		{
 			engine: "postgres", start: startPostgres,
-			database: "emerald", username: "postgres", password: "pw", port: 5432,
+			database: "cafe", username: "postgres", password: "pw", port: 5432,
 			seededTable:   "customers",
 			truncateQuery: "SELECT generate_series(1, 3000) AS n",
 		},

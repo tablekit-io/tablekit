@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -53,25 +54,42 @@ func startBastion(t *testing.T, authorizedKey string) string {
 	return name
 }
 
-// startPostgres starts a tmpfs-backed postgres:17 seeded with emerald.sql and
+// startPostgres starts a tmpfs-backed postgres:17 seeded with cafe_data.sql and
 // returns the container name (its DNS name on the shared network).
 func startPostgres(t *testing.T) string {
 	t.Helper()
 	name := harness.RunContainer(t, harness.ContainerSpec{
 		Name:  harness.UniqueName("pg"),
 		Image: "postgres:17",
-		Env:   []string{"POSTGRES_PASSWORD=pw", "POSTGRES_DB=emerald"},
+		Env:   []string{"POSTGRES_PASSWORD=pw", "POSTGRES_DB=cafe"},
 		Tmpfs: []string{"/var/lib/postgresql/data"},
 	})
 	// psql (not pg_isready) as the probe: pg_isready reports ready during the
 	// image's temporary init server, before POSTGRES_DB exists and the real TCP
 	// server is up. A successful query against the target db means truly ready.
-	harness.WaitContainerReady(t, name, 60*time.Second, "psql", "-U", "postgres", "-d", "emerald", "-c", "SELECT 1")
-	seed, err := os.Open(filepath.Join(dbDir(), "test-data", "emerald.sql"))
+	harness.WaitContainerReady(t, name, 60*time.Second, "psql", "-U", "postgres", "-d", "cafe", "-c", "SELECT 1")
+	seed, err := os.Open(ensureCafeSeed(t))
 	require.NoError(t, err)
 	defer seed.Close()
-	harness.DockerExecStdin(t, name, seed, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "emerald")
+	harness.DockerExecStdin(t, name, seed, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "cafe")
 	return name
+}
+
+// ensureCafeSeed returns the path to cafe_data.sql, generating it first if it is
+// absent. The seed is a generator artifact (gitignored), so a fresh checkout or
+// CI run produces it on demand by running the committed generator.
+func ensureCafeSeed(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(dbDir(), "test-data")
+	seedPath := filepath.Join(dir, "cafe_data.sql")
+	if _, err := os.Stat(seedPath); err == nil {
+		return seedPath
+	}
+	cmd := exec.Command("go", "run", "generate_cafe_data.go")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "generate cafe_data.sql: %s", out)
+	return seedPath
 }
 
 // startMySQL starts a tmpfs-backed mysql:8.4 seeded with dira.sql (which creates
