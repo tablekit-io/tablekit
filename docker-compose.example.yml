@@ -75,7 +75,7 @@ services:
       POSTGRES_DB: tablekit
     volumes:
       - type: volume
-        source: appdata
+        source: pgdata
         target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
@@ -87,4 +87,4 @@ services:
 
 volumes:
   # Persists TableKit's own state (the postgres database).
-  appdata:
+  pgdata:

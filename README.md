@@ -98,7 +98,9 @@ Everything is set through the environment.
 | `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
 | `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
 | `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |
-| `DATA_DIR`        | `./data`                   | TableKit's own state: OAuth/pairing JSON, the signing key, and the SQLite DB (`tablekit.db`) of stored queries. |
+| `DATA_DIR`        | `./data`                   | Where the signing key (`signing.key`) is kept. TableKit's other state (OAuth/pairing, stored queries) now lives in Postgres — see the `DB_*` / `DATABASE_URL` rows below. |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | — / `5432` / — / — / `tablekit` / `disable` | Structured connection to TableKit's own state database (Postgres). When `DB_HOST`, `DB_USER` and `DB_PASSWORD` are all set, they take precedence over `DATABASE_URL`. |
+| `DATABASE_URL`    | `postgres://postgres@localhost:5432/tablekit?sslmode=disable` | Full `postgres://` DSN for TableKit's own state database, used when the structured `DB_*` variables above are not all set. |
 | `SIGNING_KEY`     | generated                  | Base64 HS256 key. Set it to share one key across instances; otherwise one is generated under `DATA_DIR`. Short keys are zero-padded to 32 bytes. |
 | `ACCESS_TTL`      | `15m`                      | Access token lifetime.                          |
 | `REFRESH_TTL`     | `168h`                     | Refresh token lifetime.                         |
@@ -152,10 +154,10 @@ The MCP side speaks Streamable HTTP. Auth is plain OAuth 2.1: clients register
 themselves dynamically and use PKCE, so there are no secrets to manage by hand.
 Access is gated by pairing rather than a user database, which suits a server
 that's yours alone. State — registered clients and pairing, refresh-token chains
-and CLI bearer tokens, plus the signing key — lives as JSON files under
-`DATA_DIR`, alongside a SQLite database for stored queries; both are generated on
-first boot and gitignored. The SQLite schema is brought up to date automatically
-on every start (embedded goose migrations).
+and CLI bearer tokens, and stored queries — lives in a Postgres database of
+TableKit's own, whose schema is brought up to date automatically on every start
+(embedded goose migrations). The one exception is the signing key, kept as a file
+under `DATA_DIR` (generated on first boot and gitignored).
 
 Each query runs on its own connection, reaching the database directly or through
 a per-database SSH tunnel and/or TLS when configured. Read-only is enforced where
@@ -163,8 +165,8 @@ it counts: every query runs inside a read-only transaction, so TableKit won't ru
 writes or DDL on your behalf.
 
 TableKit stores queries, not result rows. `run_query` runs read-only SQL, saves
-the query (database, SQL, a description) to its SQLite DB, and returns a
-`result_key`. Everything downstream takes that key and re-runs the stored SQL
+the query (database, SQL, a description) to its own Postgres database, and returns
+a `result_key`. Everything downstream takes that key and re-runs the stored SQL
 against live data: `retrieve_results` pages through rows, `render_cartesian_series_chart`
 and `render_proportional_chart` draw the in-chat MCP Apps charts (fed by an
 app-only `fetch_chart_data`), and `get_export_url` mints a short-lived signed URL
@@ -269,7 +271,7 @@ mapping in `docker-compose.yml` makes that name resolve on Linux too).
 ```
 core/
 ├── cli/                # tablekit CLI — serve, pairing (incl. bearer tokens)
-├── db/                 # SQLite store (modernc, pure Go) + embedded goose migrations
+├── db/                 # Postgres store (pgx stdlib) + embedded goose migrations
 ├── engine/             # read-only SQL engine — consumers only touch Service
 │   ├── config/         # databases.yaml loading, validation, secret resolution
 │   ├── driver/         # per-engine impls — postgres, mysql (also mariadb)
@@ -280,8 +282,8 @@ core/
 │   └── ui/             # embedded MCP Apps widget builds (widgets/)
 ├── services/           # shared dependencies bundle
 │   ├── config/         # environment config
-│   ├── store/          # JSON state (clients, pairing, tokens, signing key)
-│   ├── queries/        # stored-query repository (mcp_queries) over SQLite
+│   ├── store/          # Postgres state (clients, pairing, tokens) + signing key file
+│   ├── queries/        # stored-query repository (mcp_queries) over Postgres
 │   ├── oauth/          # OAuth 2.1 issuer — JWT, PKCE, bearer + export tokens
 │   └── services.go     # the Services bundle (config, store, engine, issuer, db, queries)
 └── http/               # the two Gin listeners

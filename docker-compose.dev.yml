@@ -87,7 +87,7 @@ services:
       - "5433:5432"
     volumes:
       - type: volume
-        source: appdata
+        source: pgdata
         target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
@@ -125,7 +125,7 @@ services:
         read_only: true
       # Persist the seeded data across container recreation.
       - type: volume
-        source: pgdata
+        source: example-cafe-db-data
         target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d cafe"]
@@ -162,9 +162,9 @@ services:
 volumes:
   gocache:
   # TableKit's own state for the app-state postgres service.
-  appdata:
-  # Seeded cafe data for the example-cafe-db service.
   pgdata:
+  # Seeded cafe data for the example-cafe-db service.
+  example-cafe-db-data:
 
 networks:
   # Stable, explicitly-named network (independent of the compose project dir) so
