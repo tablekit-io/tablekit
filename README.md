@@ -28,8 +28,8 @@ queries return.
 You'll need Docker. Declare your databases in a YAML file, give TableKit the URL
 it will be reachable on, and bring it up.
 
-Databases live in `databases.yaml` (by default `DATA_DIR/databases.yaml`; point
-elsewhere with `DATABASES_FILE`). Each entry is keyed by the name the assistant
+Databases live in `databases.yaml` (by default `./databases.yaml` in the working
+directory; point elsewhere with `DATABASES_FILE`). Each entry is keyed by the name the assistant
 will use:
 
 ```yaml
@@ -94,7 +94,7 @@ Everything is set through the environment.
 
 | Variable          | Default                    | What it's for                                   |
 |-------------------|----------------------------|-------------------------------------------------|
-| `DATABASES_FILE`  | `DATA_DIR/databases.yaml`  | The YAML file declaring your databases (see below). Resolved by base name, so `.yaml` or `.yml` both work; having both at once is a fatal startup error. A missing file just means no databases. |
+| `DATABASES_FILE`  | `./databases.yaml`  | The YAML file declaring your databases (see below), relative to the working directory. Resolved by base name, so `.yaml` or `.yml` both work; having both at once is a fatal startup error. A missing file just means no databases. |
 | `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
 | `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
 | `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |

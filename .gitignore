@@ -14,5 +14,10 @@ core/mcp/ui/widgets/*.html
 core/mcp/ui/widgets/manifest.json
 
 /data
+# Real databases config (holds connection secrets); the default lookup is
+# ./databases.{yaml,yml} in the working directory. Examples/dev configs are
+# committed separately (databases.example.yml, core/databases.dev.yaml).
+/databases.yaml
+/databases.yml
 /databases.example.yml
 /docker-compose.example.yml

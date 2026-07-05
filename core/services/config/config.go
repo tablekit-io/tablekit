@@ -25,7 +25,8 @@ type Config struct {
 	// DataDir holds the gitignored JSON state (clients, tokens, signing key).
 	DataDir string
 	// DatabasesFile is the YAML file declaring the databases run_query can query.
-	// Defaults to DATA_DIR/databases.yaml; a missing file means no databases.
+	// Defaults to ./databases.yaml (relative to the working directory, not
+	// DATA_DIR); a missing file means no databases.
 	DatabasesFile string
 	// SigningKey, if set, is a base64-encoded HS256 secret supplied externally;
 	// it takes precedence over the generated DATA_DIR/signing.key. Shorter keys
@@ -45,7 +46,7 @@ func Load() *Config {
 		ControlPort:   envOrDefault("CONTROL_PORT", "8081"),
 		PublicBaseURL: strings.TrimRight(envOrDefault("PUBLIC_BASE_URL", "http://localhost:8080"), "/"),
 		DataDir:       dataDir,
-		DatabasesFile: envOrDefault("DATABASES_FILE", filepath.Join(dataDir, "databases.yaml")),
+		DatabasesFile: envOrDefault("DATABASES_FILE", "databases.yaml"),
 		SigningKey:    os.Getenv("SIGNING_KEY"),
 		AccessTTL:     durationOrDefault("ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:    durationOrDefault("REFRESH_TTL", 7*24*time.Hour),

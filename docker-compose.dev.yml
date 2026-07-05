@@ -13,7 +13,7 @@ services:
       # this container can reach them by name (e.g. testdb:5432).
       TABLEKIT_E2E_DOCKER_NETWORK: tablekit
       # Point run_sql at the committed dev DB config (core/ is bind-mounted to
-      # /app below). Overrides the default ./data/databases.yaml, which is
+      # /app below). Overrides the default ./databases.yaml, which is
       # gitignored. databases.dev.yaml targets the postgres service (cafe DB).
       DATABASES_FILE: /app/databases.dev.yaml
     # host.docker.internal resolves to the host on Docker Desktop natively; the
