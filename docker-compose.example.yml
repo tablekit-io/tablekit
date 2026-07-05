@@ -1,0 +1,53 @@
+services:
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile-core
+
+    environment:
+      # The externally reachable base url; used as the OAuth issuer.
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+
+      # TableKit's own state. (see volumes)
+      DATA_DIR: /data
+
+      # Where the databases config is read from.
+      DATABASES_FILE: "${DATABASES_FILE:-/app/databases.yaml}"
+
+      # Set to share one HS256 key across instances; By default: generated and
+      # persisted under DATA_DIR.
+      SIGNING_KEY: "${SIGNING_KEY:-}"
+
+    ports:
+      # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
+      - target: 8080
+        published: 8080
+        protocol: tcp
+
+      # control port: /health — keep off the public internet
+      - target: 8081
+        published: 8081
+        protocol: tcp
+
+    volumes:
+      # Persists TableKit's own state.
+      - type: bind
+        source: ./data
+        target: /data
+
+      # Your databases connectors (see databases.example.yml for reference)
+      - type: bind
+        source: ./databases.yml
+        target: /app/databases.yml
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+    restart: unless-stopped
+
+volumes:
+  tablekit-data:

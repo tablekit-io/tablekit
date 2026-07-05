@@ -14,3 +14,7 @@ widgets/dist/
 # (committed so //go:embed widgets compiles before the first build); ignore the
 # content-hashed HTML the vite build emits.
 core/mcp/ui/widgets/*.html
+
+/data
+/databases.example.yml
+/docker-compose.example.yml

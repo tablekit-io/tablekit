@@ -1,0 +1,27 @@
+databases:
+  # Basic
+  foo:
+    type: postgres
+    details:
+      host: server.foo.com # the DB address as seen from TableKit (or from the SSH host, if tunneling)
+      port: 5432             # optional; per-engine default (pg 5432, mysql/mariadb 3306)
+      database: foo
+      username: user
+      password: password123
+
+  # Basic via connection string
+  bar:
+    type: postgres
+    connectionString: postgres://postgres@bar.example.com:5432/bar
+
+  # Via SSH tunneling
+  baz:
+    type: mariadb
+    details:
+      host: 10.0.0.5 # resolved from the SSH host, not from TableKit's container
+      username: user
+      password: password123
+    ssh:
+      host: bastion.example.com
+      username: ubuntu
+      sshKeyFilePath: /keys/id_ed25519

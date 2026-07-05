@@ -1,0 +1,64 @@
+# ---- Stage 1: build the widgets (vite single-file HTML + manifest.json) ----
+FROM oven/bun:1 AS widgets
+
+WORKDIR /widgets
+
+# Manifests first so `bun install` caches until deps actually change.
+COPY widgets/package.json widgets/bun.lock ./
+
+RUN bun install --frozen-lockfile
+
+COPY widgets/ ./
+
+# Emits the templates into /widgets/dist.
+RUN bun run build
+
+
+# ---- Stage 2: compile the Go binary with the widgets embedded ----
+FROM golang:1.25 AS build
+
+WORKDIR /app
+
+# Module manifests first so `go mod download` caches until deps change.
+COPY core/go.mod core/go.sum ./
+
+RUN go mod download
+
+COPY core/ ./
+
+# Overwrite the embed dir (core/mcp/ui/widgets) with the freshly built widgets,
+# so //go:embed picks up this build's HTML + manifest.json.
+#
+# Must happen before `go build`.
+COPY --from=widgets /widgets/dist/ ./mcp/ui/widgets/
+
+# CGO_ENABLED=0 yields a fully static binary — no libc at runtime.
+# -s -w strips debug info to shrink it.
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /tablekit .
+
+# ---- Stage 3: runtime ----
+FROM debian:bookworm-slim
+
+# ca-certificates: TLS to remote databases. curl: the compose healthcheck.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Run as a non-root user; DATA_DIR lives in a volume owned by it.
+RUN useradd --system --uid 10001 tablekit \
+ && mkdir -p /data \
+ && chown tablekit:tablekit /data
+
+COPY --from=build /tablekit /usr/local/bin/tablekit
+
+USER tablekit
+
+# TableKit's own state (SQLite tablekit.db, signing.key, OAuth/pairing JSON).
+ENV DATA_DIR=/data
+
+VOLUME ["/data"]
+
+# 8080: MCP (/mcp) + OAuth. 8081: control (/health).
+EXPOSE 8080 8081
+
+CMD ["tablekit", "serve"]

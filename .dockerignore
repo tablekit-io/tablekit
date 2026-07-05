@@ -1,0 +1,10 @@
+# Root build context (used by ./Dockerfile-core). Keep it lean — deps and generated
+# output are rebuilt inside the image. (core/.dockerignore only applies when the
+# context is ./core, e.g. Dockerfile-dev.)
+.git
+**/node_modules
+core/data
+widgets/dist
+**/*.log
+.idea
+**/.DS_Store
