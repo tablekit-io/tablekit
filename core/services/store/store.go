@@ -1,21 +1,22 @@
-// Package store is the JSON-file persistence layer for the OAuth server.
+// Package store is the persistence layer for the OAuth/MCP server. It reads and
+// writes the oauth_* tables in tablekit's SQLite database (schema owned by the
+// db package's goose migrations) and, separately, the HS256 signing key.
 //
-// State is split across three gitignored files in DataDir, each with its own
-// source file here:
-//   - clients.json  registered clients + pairing (clients.go)
-//   - tokens.json   one-time auth codes, refresh chains, bearer tokens (tokens.go)
-//   - signing.key   the HS256 secret, generated on first use (signing.go)
+// State that lives in SQLite:
+//   - oauth_clients        registered clients + CLI bearer clients (clients.go)
+//   - oauth_paired_clients + oauth_settings  pairing set + mode  (clients.go)
+//   - oauth_auth_codes     one-time PKCE auth codes               (tokens.go)
+//   - oauth_token_chains   refresh-token lineages                 (tokens.go)
+//   - oauth_bearer_tokens  long-lived CLI bearer tokens           (tokens.go)
 //
-// There is no database; this models the dbctx Postgres tables (oauth_clients,
-// oauth_auth_codes, oauth_token_chains) as flat JSON. All mutations take a
-// single process-wide mutex and persist with an atomic temp-file rename, which
-// is sufficient for a single-instance, single-client server.
+// The one thing not in the database is signing.key: a raw HS256 secret kept as a
+// file under directory, generated on first use (signing.go). The mutex guards
+// only that file; SQLite handles its own concurrency (WAL + busy_timeout), and
+// the few read-modify-write flows use transactions.
 package store
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,62 +24,27 @@ import (
 
 // Store is the persistence handle. Construct with New.
 type Store struct {
+	// directory holds signing.key; the database holds everything else.
 	directory string
-	mu        sync.Mutex
+	database  *sql.DB
+	// mu guards signing.key file access (signing.go) and serializes the TryPair
+	// read-modify-write so concurrent "once" pairings can't both win.
+	mu sync.Mutex
 }
 
-// New ensures DataDir exists and returns a Store. Existing state files are
-// loaded once up front so schema violations fail fast at startup rather than on
-// the first request that touches them.
-func New(directory string) (*Store, error) {
+// New ensures directory exists (for signing.key) and returns a Store over the
+// given database. The oauth_* schema is brought up by the db package's
+// migrations before this is called; New only normalizes a legacy signing key.
+func New(directory string, database *sql.DB) (*Store, error) {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{directory: directory}
-	if _, err := s.loadClients(); err != nil {
-		return nil, fmt.Errorf("loading clients.json: %w", err)
-	}
-	if _, err := s.loadTokens(); err != nil {
-		return nil, fmt.Errorf("loading tokens.json: %w", err)
-	}
+	s := &Store{directory: directory, database: database}
 	if err := s.migrateLegacySigningKey(); err != nil {
-		return nil, fmt.Errorf("migrating signing.key: %w", err)
+		return nil, err
 	}
 	return s, nil
 }
 
-// ---- low-level file helpers (callers hold s.mu) -------------------------
-
+// path joins directory + name (used for signing.key).
 func (s *Store) path(name string) string { return filepath.Join(s.directory, name) }
-
-// readJSON loads name into v. A missing file is not an error: v keeps its
-// zero/initialized value so callers can start from empty state.
-func (s *Store) readJSON(name string, v any) error {
-	b, err := os.ReadFile(s.path(name))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if len(b) == 0 {
-		return nil
-	}
-	if err := validateAgainstSchema(name, b); err != nil {
-		return err
-	}
-	return json.Unmarshal(b, v)
-}
-
-// writeJSON atomically persists v to name (write temp, fsync-free rename).
-func (s *Store) writeJSON(name string, v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-	tempPath := s.path(name) + ".tmp"
-	if err := os.WriteFile(tempPath, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tempPath, s.path(name))
-}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"core/db"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,8 +31,7 @@ func TestSigningKeyGeneratesBase64(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, key1, key2)
 
-	reopened, err := New(storageService.directory)
-	require.NoError(t, err)
+	reopened := reopen(t, storageService)
 	key3, err := reopened.SigningKey()
 	require.NoError(t, err)
 	assert.Equal(t, key1, key3)
@@ -47,8 +48,12 @@ func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(keyPath, legacy, 0o600))
 
+	database, err := db.Open(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { database.Close() })
+
 	// New() migrates the file in place at boot.
-	storageService, err := New(directory)
+	storageService, err := New(directory, database)
 	require.NoError(t, err)
 
 	raw, err := os.ReadFile(keyPath)
@@ -62,7 +67,7 @@ func TestSigningKeyLegacyMigrationAtBoot(t *testing.T) {
 	assert.Equal(t, legacy, key, "same key bytes preserved across migration")
 
 	// Re-opening is idempotent.
-	storageService2, err := New(directory)
+	storageService2, err := New(directory, database)
 	require.NoError(t, err)
 	key2, err := storageService2.SigningKey()
 	require.NoError(t, err)

@@ -42,7 +42,7 @@ func (h *Handlers) HandleRegister(c *gin.Context) {
 		RedirectURIs: request.RedirectURIs,
 		CreatedAt:    time.Now(),
 	}
-	if err := h.appServices.Store.SaveClient(client); err != nil {
+	if err := h.appServices.Store.SaveClient(c.Request.Context(), client); err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not persist client")
 		return
 	}

@@ -1,12 +1,14 @@
 package oauth
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"core/db"
 	"core/services/config"
 	"core/services/store"
 
@@ -16,7 +18,7 @@ import (
 
 func newIssuer(t *testing.T, configService *config.Config) *Issuer {
 	t.Helper()
-	storageService, err := store.New(t.TempDir())
+	storageService, err := store.New(t.TempDir(), openTestDB(t))
 	require.NoError(t, err)
 	issuer, err := NewIssuer(configService, storageService)
 	require.NoError(t, err)
@@ -203,9 +205,18 @@ func flip(b byte) string {
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	directory := t.TempDir()
-	storageService, err := store.New(directory)
+	storageService, err := store.New(directory, openTestDB(t))
 	require.NoError(t, err)
 	return storageService, directory
+}
+
+// openTestDB opens a migrated SQLite database in a temp dir, closed at test end.
+func openTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	database, err := db.Open(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { database.Close() })
+	return database
 }
 
 func TestEnvSigningKeyIsSharedAcrossInstances(t *testing.T) {

@@ -60,7 +60,8 @@ func TestBearerTokenRevoked(t *testing.T) {
 	_, err = harness.Connect(t, server.AppURL, harness.BearerClient(rawJWT))
 	assert.Error(t, err, "raw bearer JWT must not authenticate on the OAuth path")
 
-	// Revoke by id, then the token is rejected (the server reads tokens.json per request).
+	// Revoke by id, then the token is rejected (the server checks the token's
+	// row in the database per request).
 	harness.RunCLI(t, server.DataDir, "pairing", "token:revoke", tokenID)
 	_, err = harness.Connect(t, server.AppURL, harness.BearerClient(token))
 	assert.Error(t, err, "revoked bearer token must be rejected")

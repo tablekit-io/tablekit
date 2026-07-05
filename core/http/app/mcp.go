@@ -18,7 +18,7 @@ import (
 // WWW-Authenticate header pointing at the protected-resource metadata on 401.
 func MCPRoute(appServices *services.Services) http.Handler {
 	issuer := appServices.Issuer
-	verifier := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+	verifier := func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
 		// A CLI-minted bearer token is marked by TokenPrefix: validate it as a
 		// bearer JWT and reject it if its store row is missing or revoked.
 		if rawJWT, ok := strings.CutPrefix(token, oauth.TokenPrefix); ok {
@@ -26,7 +26,7 @@ func MCPRoute(appServices *services.Services) http.Handler {
 			if err != nil {
 				return nil, auth.ErrInvalidToken
 			}
-			bearerToken, err := appServices.Store.GetBearerToken(claims.ID)
+			bearerToken, err := appServices.Store.GetBearerToken(ctx, claims.ID)
 			if err != nil || bearerToken == nil || bearerToken.Revoked {
 				return nil, auth.ErrInvalidToken
 			}

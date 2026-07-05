@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"testing"
 
+	"core/db"
 	"core/services/store"
 
 	"github.com/stretchr/testify/assert"
@@ -28,6 +30,7 @@ func TestPairingEnable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pairingOnce, pairingIndefinitely = tt.once, tt.indef
+			pairingEnableCmd.SetContext(context.Background())
 			err := pairingEnableCmd.RunE(pairingEnableCmd, nil)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -41,15 +44,20 @@ func TestPairingEnable(t *testing.T) {
 
 func TestPairingDisable(t *testing.T) {
 	t.Setenv("DATA_DIR", t.TempDir())
+	pairingDisableCmd.SetContext(context.Background())
 	require.NoError(t, pairingDisableCmd.RunE(pairingDisableCmd, nil))
 	assertMode(t, store.PairingDisabled)
 }
 
 func assertMode(t *testing.T, want string) {
 	t.Helper()
-	storageService, err := store.New(os.Getenv("DATA_DIR"))
+	dataDir := os.Getenv("DATA_DIR")
+	database, err := db.Open(dataDir)
 	require.NoError(t, err)
-	mode, _, err := storageService.PairingStatus()
+	t.Cleanup(func() { database.Close() })
+	storageService, err := store.New(dataDir, database)
+	require.NoError(t, err)
+	mode, _, err := storageService.PairingStatus(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, want, mode)
 }

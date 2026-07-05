@@ -59,7 +59,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		return
 	}
 
-	client, err := h.appServices.Store.GetClient(clientID)
+	client, err := h.appServices.Store.GetClient(c.Request.Context(), clientID)
 	if err != nil {
 		authorizeError(c, "internal error loading client")
 		return
@@ -74,7 +74,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	}
 
 	// Pairing gate: allowed if already paired or the mode permits a new client.
-	allowed, err := h.appServices.Store.TryPair(clientID)
+	allowed, err := h.appServices.Store.TryPair(c.Request.Context(), clientID)
 	if err != nil {
 		authorizeError(c, "internal error during pairing")
 		return
@@ -88,7 +88,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		scope = oauth.Scope
 	}
 	code := uuid.NewString()
-	if err := h.appServices.Store.PutCode(&store.AuthCode{
+	if err := h.appServices.Store.PutCode(c.Request.Context(), &store.AuthCode{
 		Code:          code,
 		ClientID:      clientID,
 		RedirectURI:   redirectURI,

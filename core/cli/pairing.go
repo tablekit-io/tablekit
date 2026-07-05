@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ var pairingEnableCmd = &cobra.Command{
 		if pairingIndefinitely {
 			mode = store.PairingIndefinite
 		}
-		return applyPairingMode(mode)
+		return applyPairingMode(cmd.Context(), mode)
 	},
 }
 
@@ -43,7 +44,7 @@ var pairingDisableCmd = &cobra.Command{
 	Use:   "disable",
 	Short: "Reject any new client from pairing",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return applyPairingMode(store.PairingDisabled)
+		return applyPairingMode(cmd.Context(), store.PairingDisabled)
 	},
 }
 
@@ -59,7 +60,7 @@ var pairingTokenGenerateCmd = &cobra.Command{
 			return err
 		}
 
-		minted, err := oauth.MintBearer(appServices.Store, appServices.Issuer)
+		minted, err := oauth.MintBearer(cmd.Context(), appServices.Store, appServices.Issuer)
 		if err != nil {
 			return err
 		}
@@ -93,7 +94,7 @@ var pairingTokenRevokeCmd = &cobra.Command{
 			tokenID = id
 		}
 
-		if err := appServices.Store.RevokeBearerToken(tokenID); err != nil {
+		if err := appServices.Store.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
 			return err
 		}
 		fmt.Printf("revoked bearer token %s [data dir: %s]\n", tokenID, appServices.Config.DataDir)
@@ -104,15 +105,15 @@ var pairingTokenRevokeCmd = &cobra.Command{
 // applyPairingMode persists the mode to the data dir and prints the result.
 // It targets the same DATA_DIR the server reads, so a running server picks up
 // the change on its next authorize.
-func applyPairingMode(mode string) error {
+func applyPairingMode(ctx context.Context, mode string) error {
 	appServices, err := services.New()
 	if err != nil {
 		return err
 	}
-	if err := appServices.Store.SetPairingMode(mode); err != nil {
+	if err := appServices.Store.SetPairingMode(ctx, mode); err != nil {
 		return err
 	}
-	_, paired, err := appServices.Store.PairingStatus()
+	_, paired, err := appServices.Store.PairingStatus(ctx)
 	if err != nil {
 		return err
 	}

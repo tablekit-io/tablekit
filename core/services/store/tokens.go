@@ -1,6 +1,9 @@
 package store
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -42,159 +45,155 @@ type BearerToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// tokensFile is the on-disk shape of tokens.json.
-type tokensFile struct {
-	Codes  map[string]*AuthCode    `json:"codes"`
-	Chains map[string]*Chain       `json:"chains"`
-	Tokens map[string]*BearerToken `json:"tokens"`
-}
-
-func (s *Store) loadTokens() (*tokensFile, error) {
-	tokensData := &tokensFile{
-		Codes:  map[string]*AuthCode{},
-		Chains: map[string]*Chain{},
-		Tokens: map[string]*BearerToken{},
-	}
-	if err := s.readJSON("tokens.json", tokensData); err != nil {
-		return nil, err
-	}
-	if tokensData.Codes == nil {
-		tokensData.Codes = map[string]*AuthCode{}
-	}
-	if tokensData.Chains == nil {
-		tokensData.Chains = map[string]*Chain{}
-	}
-	if tokensData.Tokens == nil {
-		tokensData.Tokens = map[string]*BearerToken{}
-	}
-	return tokensData, nil
-}
-
 // ---- auth codes ---------------------------------------------------------
 
 // PutCode stores a one-time authorization code.
-func (s *Store) PutCode(c *AuthCode) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) PutCode(ctx context.Context, c *AuthCode) error {
+	_, err := s.database.ExecContext(ctx,
+		`INSERT INTO oauth_auth_codes
+		 (code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		c.Code, c.ClientID, c.RedirectURI, c.CodeChallenge, c.Scope, c.UserID, c.ExpiresAt,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("put auth code: %w", err)
 	}
-	tokensData.Codes[c.Code] = c
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }
 
-// ConsumeCode atomically fetches and deletes a code (single use). Returns nil
-// if the code is unknown/already used.
-func (s *Store) ConsumeCode(code string) (*AuthCode, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+// ConsumeCode atomically fetches and deletes a code (single use). Returns nil if
+// the code is unknown/already used. The SELECT + DELETE run in a transaction so
+// two redemptions of the same code cannot both succeed.
+func (s *Store) ConsumeCode(ctx context.Context, code string) (*AuthCode, error) {
+	tx, err := s.database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	c := tokensData.Codes[code]
-	if c == nil {
+	defer tx.Rollback()
+
+	var c AuthCode
+	err = tx.QueryRowContext(ctx,
+		`SELECT code, client_id, redirect_uri, code_challenge, scope, user_id, expires_at
+		 FROM oauth_auth_codes WHERE code = ?`, code,
+	).Scan(&c.Code, &c.ClientID, &c.RedirectURI, &c.CodeChallenge, &c.Scope, &c.UserID, &c.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-	delete(tokensData.Codes, code)
-	if err := s.writeJSON("tokens.json", tokensData); err != nil {
+	if err != nil {
+		return nil, fmt.Errorf("read auth code: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_auth_codes WHERE code = ?`, code); err != nil {
+		return nil, fmt.Errorf("consume auth code: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return &c, nil
 }
 
 // ---- chains -------------------------------------------------------------
 
 // NewChain persists a fresh refresh-token chain.
-func (s *Store) NewChain(c *Chain) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) NewChain(ctx context.Context, c *Chain) error {
+	_, err := s.database.ExecContext(ctx,
+		`INSERT INTO oauth_token_chains
+		 (id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.ID, c.ClientID, c.UserID, c.Scope, c.RedirectURI, c.Revoked, c.InvalidatedBefore, c.CreatedAt,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("new chain: %w", err)
 	}
-	tokensData.Chains[c.ID] = c
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }
 
 // GetChain returns the chain by id, or nil if unknown.
-func (s *Store) GetChain(id string) (*Chain, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
-	if err != nil {
-		return nil, err
+func (s *Store) GetChain(ctx context.Context, id string) (*Chain, error) {
+	row := s.database.QueryRowContext(ctx,
+		`SELECT id, client_id, user_id, scope, redirect_uri, revoked, invalidated_before, created_at
+		 FROM oauth_token_chains WHERE id = ?`, id,
+	)
+	var c Chain
+	err := row.Scan(&c.ID, &c.ClientID, &c.UserID, &c.Scope, &c.RedirectURI,
+		&c.Revoked, &c.InvalidatedBefore, &c.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
 	}
-	return tokensData.Chains[id], nil
+	if err != nil {
+		return nil, fmt.Errorf("get chain %q: %w", id, err)
+	}
+	return &c, nil
 }
 
 // BumpCutoff advances a chain's InvalidatedBefore to t (rotation).
-func (s *Store) BumpCutoff(id string, t time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) BumpCutoff(ctx context.Context, id string, t time.Time) error {
+	_, err := s.database.ExecContext(ctx,
+		`UPDATE oauth_token_chains SET invalidated_before = ? WHERE id = ?`, t, id,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("bump chain cutoff %q: %w", id, err)
 	}
-	if chain := tokensData.Chains[id]; chain != nil {
-		chain.InvalidatedBefore = t
-	}
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }
 
 // RevokeChain marks a chain revoked (replay detected / logout).
-func (s *Store) RevokeChain(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) RevokeChain(ctx context.Context, id string) error {
+	_, err := s.database.ExecContext(ctx,
+		`UPDATE oauth_token_chains SET revoked = 1 WHERE id = ?`, id,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("revoke chain %q: %w", id, err)
 	}
-	if chain := tokensData.Chains[id]; chain != nil {
-		chain.Revoked = true
-	}
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }
 
 // ---- bearer tokens ------------------------------------------------------
 
 // PutBearerToken persists a CLI-minted bearer token.
-func (s *Store) PutBearerToken(t *BearerToken) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) PutBearerToken(ctx context.Context, t *BearerToken) error {
+	_, err := s.database.ExecContext(ctx,
+		`INSERT INTO oauth_bearer_tokens (id, client_id, revoked, created_at, expires_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		t.ID, t.ClientID, t.Revoked, t.CreatedAt, t.ExpiresAt,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("put bearer token: %w", err)
 	}
-	tokensData.Tokens[t.ID] = t
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }
 
 // GetBearerToken returns the bearer token by id, or nil if unknown.
-func (s *Store) GetBearerToken(id string) (*BearerToken, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
-	if err != nil {
-		return nil, err
+func (s *Store) GetBearerToken(ctx context.Context, id string) (*BearerToken, error) {
+	row := s.database.QueryRowContext(ctx,
+		`SELECT id, client_id, revoked, created_at, expires_at
+		 FROM oauth_bearer_tokens WHERE id = ?`, id,
+	)
+	var t BearerToken
+	err := row.Scan(&t.ID, &t.ClientID, &t.Revoked, &t.CreatedAt, &t.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
 	}
-	return tokensData.Tokens[id], nil
+	if err != nil {
+		return nil, fmt.Errorf("get bearer token %q: %w", id, err)
+	}
+	return &t, nil
 }
 
 // RevokeBearerToken marks a bearer token revoked. It returns an error if the id
 // is unknown, so the CLI can tell the user nothing was revoked.
-func (s *Store) RevokeBearerToken(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tokensData, err := s.loadTokens()
+func (s *Store) RevokeBearerToken(ctx context.Context, id string) error {
+	result, err := s.database.ExecContext(ctx,
+		`UPDATE oauth_bearer_tokens SET revoked = 1 WHERE id = ?`, id,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke bearer token %q: %w", id, err)
+	}
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	token := tokensData.Tokens[id]
-	if token == nil {
+	if affected == 0 {
 		return fmt.Errorf("no bearer token with id %q", id)
 	}
-	token.Revoked = true
-	return s.writeJSON("tokens.json", tokensData)
+	return nil
 }

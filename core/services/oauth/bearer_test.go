@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -11,8 +12,9 @@ import (
 func TestMintBearer(t *testing.T) {
 	storageService, _ := newStore(t)
 	issuer := newIssuer(t, testConfig())
+	ctx := context.Background()
 
-	minted, err := MintBearer(storageService, issuer)
+	minted, err := MintBearer(ctx, storageService, issuer)
 	require.NoError(t, err)
 
 	// The handed-out token is prefixed and carries the returned id/expiry.
@@ -21,7 +23,7 @@ func TestMintBearer(t *testing.T) {
 	assert.False(t, minted.ExpiresAt.IsZero())
 
 	// The token row is persisted, retrievable by id, and not revoked.
-	row, err := storageService.GetBearerToken(minted.ID)
+	row, err := storageService.GetBearerToken(ctx, minted.ID)
 	require.NoError(t, err)
 	require.NotNil(t, row)
 	assert.False(t, row.Revoked)

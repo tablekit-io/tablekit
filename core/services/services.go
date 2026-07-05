@@ -30,7 +30,13 @@ type Services struct {
 // configured databases.
 func New() (*Services, error) {
 	configService := config.Load()
-	storageService, err := store.New(configService.DataDir)
+	// Open the SQLite database first: the store now persists its OAuth state in
+	// it (and only signing.key stays a file).
+	database, err := db.Open(configService.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	storageService, err := store.New(configService.DataDir, database)
 	if err != nil {
 		return nil, err
 	}
@@ -50,10 +56,6 @@ func New() (*Services, error) {
 		return nil, err
 	}
 	issuer, err := oauth.NewIssuer(configService, storageService)
-	if err != nil {
-		return nil, err
-	}
-	database, err := db.Open(configService.DataDir)
 	if err != nil {
 		return nil, err
 	}
