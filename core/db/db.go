@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/pressly/goose/v3"
@@ -33,6 +34,12 @@ const dbFileName = "tablekit.db"
 // it to the latest schema before returning. The returned *sql.DB is ready to use
 // and must be closed by the caller on shutdown.
 func Open(dataDir string) (*sql.DB, error) {
+	// Ensure the data directory exists: this is its first consumer on startup
+	// (before the store), and sqlite won't create missing parent directories, so
+	// a fresh DATA_DIR would otherwise fail to open the database file.
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create data dir %s: %w", dataDir, err)
+	}
 	path := filepath.Join(dataDir, dbFileName)
 	// WAL for concurrent readers alongside the single writer; foreign_keys on so
 	// constraints are enforced; busy_timeout so a briefly-locked writer waits
