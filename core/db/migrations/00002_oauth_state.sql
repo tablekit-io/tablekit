@@ -54,15 +54,16 @@ CREATE TABLE oauth_paired_clients (
     client_id TEXT PRIMARY KEY
 );
 
--- Singleton key/value settings. Currently holds only 'pairing_mode'; an absent
--- row means the Go default ("once"), matching the old loadClients behavior.
-CREATE TABLE oauth_settings (
+-- Generic key/value config with JSON-encoded values. Currently holds only
+-- 'pairing_mode'; an absent row means the Go default ("once"), matching the old
+-- loadClients behavior.
+CREATE TABLE config (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
 
 -- +goose Down
-DROP TABLE oauth_settings;
+DROP TABLE config;
 DROP TABLE oauth_paired_clients;
 DROP TABLE oauth_bearer_tokens;
 DROP TABLE oauth_token_chains;

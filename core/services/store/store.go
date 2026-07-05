@@ -4,7 +4,7 @@
 //
 // State that lives in SQLite:
 //   - oauth_clients        registered clients + CLI bearer clients (clients.go)
-//   - oauth_paired_clients + oauth_settings  pairing set + mode  (clients.go)
+//   - oauth_paired_clients  pairing set; config  pairing mode    (clients.go)
 //   - oauth_auth_codes     one-time PKCE auth codes               (tokens.go)
 //   - oauth_token_chains   refresh-token lineages                 (tokens.go)
 //   - oauth_bearer_tokens  long-lived CLI bearer tokens           (tokens.go)

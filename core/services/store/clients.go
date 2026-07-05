@@ -31,7 +31,7 @@ const (
 	PairingDisabled   = "disabled"   // no new client may pair
 )
 
-// pairingModeKey is the oauth_settings row that holds the current pairing mode.
+// pairingModeKey is the config row that holds the current pairing mode.
 const pairingModeKey = "pairing_mode"
 
 // SaveClient persists a newly registered client. redirect_uris is stored as a
@@ -175,33 +175,58 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// pairingMode reads the current mode, defaulting to PairingOnce when the setting
+// getConfig reads the JSON value under key into dest, reporting whether the row
+// existed. A missing key is not an error: it returns (false, nil) so callers can
+// apply their own default.
+func getConfig(ctx context.Context, q querier, key string, dest any) (bool, error) {
+	var raw string
+	err := q.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, key).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read config %q: %w", key, err)
+	}
+	if err := json.Unmarshal([]byte(raw), dest); err != nil {
+		return false, fmt.Errorf("decode config %q: %w", key, err)
+	}
+	return true, nil
+}
+
+// setConfig upserts value (JSON-encoded) under key.
+func setConfig(ctx context.Context, q querier, key string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode config %q: %w", key, err)
+	}
+	_, err = q.ExecContext(ctx,
+		`INSERT INTO config (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, string(raw),
+	)
+	if err != nil {
+		return fmt.Errorf("set config %q: %w", key, err)
+	}
+	return nil
+}
+
+// pairingMode reads the current mode, defaulting to PairingOnce when the config
 // row is absent (matching the old JSON default).
 func pairingMode(ctx context.Context, q querier) (string, error) {
 	var mode string
-	err := q.QueryRowContext(ctx,
-		`SELECT value FROM oauth_settings WHERE key = ?`, pairingModeKey,
-	).Scan(&mode)
-	if errors.Is(err, sql.ErrNoRows) {
-		return PairingOnce, nil
-	}
+	found, err := getConfig(ctx, q, pairingModeKey, &mode)
 	if err != nil {
-		return "", fmt.Errorf("read pairing mode: %w", err)
+		return "", err
+	}
+	if !found {
+		return PairingOnce, nil
 	}
 	return mode, nil
 }
 
-// setPairingMode upserts the pairing_mode setting.
+// setPairingMode upserts the pairing_mode config value.
 func setPairingMode(ctx context.Context, q querier, mode string) error {
-	_, err := q.ExecContext(ctx,
-		`INSERT INTO oauth_settings (key, value) VALUES (?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-		pairingModeKey, mode,
-	)
-	if err != nil {
-		return fmt.Errorf("set pairing mode: %w", err)
-	}
-	return nil
+	return setConfig(ctx, q, pairingModeKey, mode)
 }
 
 // pairClient adds clientID to the paired set (idempotent).
