@@ -46,6 +46,14 @@ func (l Limits) WithDefaults() Limits {
 	return l
 }
 
+// Page is a single paginated window over a query. A zero Limit means "no window"
+// (drivers apply only the service caps). Drivers own the SQL dialect that realizes
+// the window, so a non-standard engine can page its own way.
+type Page struct {
+	Offset int
+	Limit  int
+}
+
 // DatabaseType is the engine discriminator used to route to an implementation.
 type DatabaseType string
 

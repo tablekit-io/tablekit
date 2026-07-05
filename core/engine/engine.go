@@ -11,8 +11,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
-	"strings"
 
 	"core/engine/config"
 	"core/engine/driver/mysql"
@@ -35,10 +33,12 @@ type DatabaseInfo struct {
 }
 
 // databaseEngine is one database-engine implementation. Each implementation
-// owns its driver, SSH tunnelling and TLS entirely; none of those types appear
-// in this signature, so consumers stay decoupled from them.
+// owns its driver, SSH tunnelling, TLS, pagination and value normalization
+// entirely; none of those types appear in this signature, so consumers stay
+// decoupled from them. Run applies the page window in the engine's own SQL
+// dialect, over-fetches to detect more rows, and reports hasMore.
 type databaseEngine interface {
-	Run(ctx context.Context, db config.Database, query string, limits config.Limits) (*encoding.Result, error)
+	Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (result *encoding.Result, hasMore bool, err error)
 }
 
 // engineFor routes a database type to its implementation.
@@ -86,7 +86,8 @@ func (s *Service) RunReadOnly(ctx context.Context, databaseName, query string) (
 	if err != nil {
 		return nil, err
 	}
-	return implementation.Run(ctx, db, query, s.limits)
+	result, _, err := implementation.Run(ctx, db, query, config.Page{Limit: s.limits.MaxRows}, s.limits)
+	return result, err
 }
 
 // PageOptions tunes a single paginated run. Any zero field falls back to a
@@ -125,42 +126,15 @@ func (s *Service) RunReadOnlyPage(ctx context.Context, databaseName, query strin
 		maxBytes = s.limits.MaxBytes
 	}
 
+	// The driver owns the page window: it applies opts.Offset/limit in its own SQL
+	// dialect, over-fetches to detect hasMore, and caps at limit+1 itself. Only the
+	// timeout and byte cap flow through Limits.
 	limits := config.Limits{
 		StatementTimeout: s.limits.StatementTimeout,
-		MaxRows:          limit + 1, // over-fetch one row to detect hasMore
 		MaxBytes:         maxBytes,
 	}
-	result, err = implementation.Run(ctx, db, wrapPaged(query, opts.Offset, limit), limits)
-	if err != nil {
-		return nil, false, err
-	}
-	hasMore = trimToLimit(result, limit)
-	return result, hasMore, nil
-}
-
-// wrapPaged wraps a user query in a LIMIT/OFFSET subquery, over-fetching one row
-// (limit+1) so the caller can tell whether more rows remain. Trailing semicolons
-// and whitespace are stripped so the query is a valid subquery. The subquery
-// alias form works for PostgreSQL, MySQL and MariaDB alike.
-func wrapPaged(query string, offset, limit int) string {
-	// Strip trailing whitespace and semicolons (in any order, e.g. "… ; ") so
-	// the result is a valid subquery body.
-	trimmed := strings.TrimRight(strings.TrimSpace(query), "; \t\r\n")
-	return "SELECT * FROM (" + trimmed + ") AS _tablekit_page" +
-		" LIMIT " + strconv.Itoa(limit+1) +
-		" OFFSET " + strconv.Itoa(offset)
-}
-
-// trimToLimit drops the over-fetched extra row (if present) and reports whether
-// it was there — i.e. whether more rows exist beyond this window. A result
-// already cut short by the byte cap keeps its Truncated flag untouched.
-func trimToLimit(result *Result, limit int) (hasMore bool) {
-	if result.RowCount > limit {
-		result.Rows = result.Rows[:limit]
-		result.RowCount = limit
-		return true
-	}
-	return false
+	page := config.Page{Offset: opts.Offset, Limit: limit}
+	return implementation.Run(ctx, db, query, page, limits)
 }
 
 // List returns the configured databases, name and type only, sorted by name.

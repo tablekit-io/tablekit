@@ -25,23 +25,23 @@ const connectGraceTimeout = 5 * time.Second
 // Engine runs read-only queries against PostgreSQL.
 type Engine struct{}
 
-func (Engine) Run(ctx context.Context, db config.Database, query string, limits config.Limits) (*encoding.Result, error) {
+func (Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
 	connConfig, serverHost, err := connConfig(db)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if db.SSH != nil {
 		target := net.JoinHostPort(connConfig.Host, strconv.Itoa(int(connConfig.Port)))
 		localAddr, cleanup, tunnelErr := sshtunnel.Open(db.SSH, target)
 		if tunnelErr != nil {
-			return nil, tunnelErr
+			return nil, false, tunnelErr
 		}
 		defer cleanup()
 
 		host, portStr, splitErr := net.SplitHostPort(localAddr)
 		if splitErr != nil {
-			return nil, splitErr
+			return nil, false, splitErr
 		}
 		port, _ := strconv.Atoi(portStr)
 		connConfig.Host = host
@@ -50,7 +50,7 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, limits 
 
 	tlsConfig, err := dbtls.BuildConfig(db.TLS, serverHost)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	connConfig.TLSConfig = tlsConfig
 	// Drop libpq-style fallbacks: each carries its own host/port/TLS and could
@@ -62,24 +62,24 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, limits 
 
 	conn, err := pgx.ConnectConfig(ctx, connConfig)
 	if err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
+		return nil, false, fmt.Errorf("connect: %w", err)
 	}
 	defer conn.Close(ctx)
 
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return nil, fmt.Errorf("begin read-only transaction: %w", err)
+		return nil, false, fmt.Errorf("begin read-only transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	timeoutMS := strconv.FormatInt(limits.StatementTimeout.Milliseconds(), 10)
 	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = "+timeoutMS); err != nil {
-		return nil, fmt.Errorf("set statement timeout: %w", err)
+		return nil, false, fmt.Errorf("set statement timeout: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, query)
+	rows, err := tx.Query(ctx, pageQuery(query, page))
 	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
+		return nil, false, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 
@@ -89,15 +89,15 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, limits 
 		columns[i] = field.Name
 	}
 
-	accumulator := encoding.NewAccumulator(columns, limits.MaxRows, limits.MaxBytes)
+	accumulator := encoding.NewAccumulator(columns, accumulatorRows(page), limits.MaxBytes)
 	for rows.Next() {
 		values, valuesErr := rows.Values()
 		if valuesErr != nil {
-			return nil, fmt.Errorf("read row: %w", valuesErr)
+			return nil, false, fmt.Errorf("read row: %w", valuesErr)
 		}
 		row := make(map[string]any, len(columns))
 		for i, column := range columns {
-			normalized, keep, reason := encoding.NormalizeValue(values[i])
+			normalized, keep, reason := normalizeValue(values[i])
 			if !keep {
 				accumulator.Omit(column, reason)
 				continue
@@ -106,17 +106,19 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, limits 
 		}
 		keepReading, addErr := accumulator.Add(row)
 		if addErr != nil {
-			return nil, addErr
+			return nil, false, addErr
 		}
 		if !keepReading {
 			break
 		}
 	}
 	if err := rows.Err(); err != nil && !accumulator.Truncated() {
-		return nil, fmt.Errorf("iterate rows: %w", err)
+		return nil, false, fmt.Errorf("iterate rows: %w", err)
 	}
 
-	return accumulator.Result(), nil
+	result := accumulator.Result()
+	hasMore := trimToLimit(result, page.Limit)
+	return result, hasMore, nil
 }
 
 // connConfig builds a pgx config from either structured details or a connection

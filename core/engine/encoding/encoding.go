@@ -1,20 +1,14 @@
 // Package encoding turns driver-decoded rows into JSON-friendly results under
-// caller-supplied caps. It owns the public Result shape and the value
-// normalization rules, and depends on nothing else in engine so drivers can use
-// it without dragging in config or connection concerns.
+// caller-supplied caps. It owns the public Result shape and the Accumulator that
+// enforces the caps, and depends on nothing else in engine so drivers can use it
+// without dragging in config or connection concerns. Value normalization is not
+// here: each driver owns its own, since the value shapes differ per driver.
 package encoding
 
 import (
-	"database/sql/driver"
 	"encoding/json"
 	"sort"
-	"time"
-	"unicode/utf8"
 )
-
-// binaryOmitReason is recorded for values that cannot be represented as JSON
-// text. It is surfaced to the caller (and the LLM) via Result.Omitted.
-const binaryOmitReason = "binary (non-UTF-8) value not representable as JSON text"
 
 // Result is a query's outcome: the column names, the rows as objects, and flags
 // telling the caller when the result was cut short or had columns dropped.
@@ -107,39 +101,5 @@ func (a *Accumulator) Result() *Result {
 		RowCount:  len(a.rows),
 		Truncated: a.truncated,
 		Omitted:   omitted,
-	}
-}
-
-// NormalizeValue converts a driver-decoded value into a JSON-friendly one. The
-// bool is false when the value must be omitted (and the string gives the
-// reason). It handles the value shapes both pgx (rows.Values) and database/sql
-// (scan into any) produce.
-func NormalizeValue(value any) (any, bool, string) {
-	switch typed := value.(type) {
-	case nil:
-		return nil, true, ""
-	case time.Time:
-		return typed.Format(time.RFC3339Nano), true, ""
-	case []byte:
-		if utf8.Valid(typed) {
-			return string(typed), true, ""
-		}
-		return nil, false, binaryOmitReason
-	case bool, string,
-		int, int8, int16, int32, int64,
-		uint, uint8, uint16, uint32, uint64,
-		float32, float64:
-		return typed, true, ""
-	default:
-		// pgtype.* values (numeric, uuid, ...) implement driver.Valuer; unwrap
-		// to the underlying basic value (numerics come back as strings, which
-		// preserves precision) and normalize that.
-		if valuer, ok := value.(driver.Valuer); ok {
-			underlying, err := valuer.Value()
-			if err == nil && underlying != value {
-				return NormalizeValue(underlying)
-			}
-		}
-		return typed, true, ""
 	}
 }

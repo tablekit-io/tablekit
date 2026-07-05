@@ -46,16 +46,16 @@ func NewMariaDB() Engine {
 	}}
 }
 
-func (e Engine) Run(ctx context.Context, db config.Database, query string, limits config.Limits) (*encoding.Result, error) {
+func (e Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
 	cfg, serverHost, err := connConfig(db)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if db.SSH != nil {
 		localAddr, cleanup, tunnelErr := sshtunnel.Open(db.SSH, cfg.Addr)
 		if tunnelErr != nil {
-			return nil, tunnelErr
+			return nil, false, tunnelErr
 		}
 		defer cleanup()
 		cfg.Addr = localAddr
@@ -64,7 +64,7 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 
 	tlsConfig, err := dbtls.BuildConfig(db.TLS, serverHost)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	cfg.TLS = tlsConfig
 	cfg.Timeout = sshtunnel.DialTimeout
@@ -74,7 +74,7 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 
 	connector, err := gomysql.NewConnector(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("build connector: %w", err)
+		return nil, false, fmt.Errorf("build connector: %w", err)
 	}
 	pool := sql.OpenDB(connector)
 	defer pool.Close()
@@ -83,7 +83,7 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 	// transaction run on the same physical connection.
 	conn, err := pool.Conn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
+		return nil, false, fmt.Errorf("connect: %w", err)
 	}
 	defer conn.Close()
 
@@ -92,22 +92,22 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 
 	tx, err := conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, fmt.Errorf("begin read-only transaction: %w", err)
+		return nil, false, fmt.Errorf("begin read-only transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.QueryContext(ctx, query)
+	rows, err := tx.QueryContext(ctx, pageQuery(query, page))
 	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
+		return nil, false, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	accumulator := encoding.NewAccumulator(columns, limits.MaxRows, limits.MaxBytes)
+	accumulator := encoding.NewAccumulator(columns, accumulatorRows(page), limits.MaxBytes)
 	scanTargets := make([]any, len(columns))
 	scanPointers := make([]any, len(columns))
 	for i := range scanTargets {
@@ -116,11 +116,11 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 
 	for rows.Next() {
 		if err := rows.Scan(scanPointers...); err != nil {
-			return nil, fmt.Errorf("read row: %w", err)
+			return nil, false, fmt.Errorf("read row: %w", err)
 		}
 		row := make(map[string]any, len(columns))
 		for i, column := range columns {
-			normalized, keep, reason := encoding.NormalizeValue(scanTargets[i])
+			normalized, keep, reason := normalizeValue(scanTargets[i])
 			if !keep {
 				accumulator.Omit(column, reason)
 				continue
@@ -129,17 +129,19 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, limit
 		}
 		keepReading, addErr := accumulator.Add(row)
 		if addErr != nil {
-			return nil, addErr
+			return nil, false, addErr
 		}
 		if !keepReading {
 			break
 		}
 	}
 	if err := rows.Err(); err != nil && !accumulator.Truncated() {
-		return nil, fmt.Errorf("iterate rows: %w", err)
+		return nil, false, fmt.Errorf("iterate rows: %w", err)
 	}
 
-	return accumulator.Result(), nil
+	result := accumulator.Result()
+	hasMore := trimToLimit(result, page.Limit)
+	return result, hasMore, nil
 }
 
 // connConfig builds a go-sql-driver config from either structured details or a
