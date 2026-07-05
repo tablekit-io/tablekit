@@ -10,10 +10,11 @@
 widgets/node_modules/
 widgets/dist/
 
-# Generated widget builds embedded by core. Keep the placeholder manifest.json
-# (committed so //go:embed widgets compiles before the first build); ignore the
-# content-hashed HTML the vite build emits.
+# Generated widget builds embedded by core. Only widgets/.gitkeep is committed so
+# //go:embed all:widgets compiles before the first build; the manifest and the
+# content-hashed HTML the vite build emits are ignored.
 core/mcp/ui/widgets/*.html
+core/mcp/ui/widgets/manifest.json
 
 /data
 /databases.example.yml

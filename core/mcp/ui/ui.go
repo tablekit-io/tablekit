@@ -12,11 +12,14 @@ import (
 	"encoding/json"
 )
 
-// The build output lives next to this file. A placeholder manifest.json ({})
-// is committed so this compiles before the first widget build; real builds (and
-// the docker-compose watcher) overwrite the widgets tree.
+// The build output lives next to this file. Only a committed .gitkeep keeps the
+// directory present so this compiles before the first widget build; the manifest
+// and content-hashed HTML the vite build emits are gitignored. The all: prefix
+// is required because the directory form of //go:embed excludes dotfiles, so a
+// tree holding only .gitkeep would otherwise match nothing. readManifest is
+// fail-soft, so a binary built before the first widget build still boots.
 //
-//go:embed widgets
+//go:embed all:widgets
 var widgets embed.FS
 
 // MIMEType is the MCP Apps content type: a self-contained HTML document the host
