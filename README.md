@@ -94,7 +94,7 @@ Everything is set through the environment.
 
 | Variable          | Default                    | What it's for                                   |
 |-------------------|----------------------------|-------------------------------------------------|
-| `DATABASES_FILE`  | `DATA_DIR/databases.yaml`  | The YAML file declaring your databases (see below). A missing file just means no databases. |
+| `DATABASES_FILE`  | `DATA_DIR/databases.yaml`  | The YAML file declaring your databases (see below). Resolved by base name, so `.yaml` or `.yml` both work; having both at once is a fatal startup error. A missing file just means no databases. |
 | `PUBLIC_BASE_URL` | `http://localhost:8080`    | The URL clients reach TableKit on.              |
 | `APP_PORT`        | `8080`                     | MCP + OAuth listener.                           |
 | `CONTROL_PORT`    | `8081`                     | Health and ops listener.                        |

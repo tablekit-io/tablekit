@@ -11,7 +11,8 @@ services:
       # TableKit's own state. (see volumes)
       DATA_DIR: /data
 
-      # Where the databases config is read from.
+      # Where the databases config is read from. Resolved by base name, so either
+      # /app/databases.yaml or /app/databases.yml is accepted
       DATABASES_FILE: "${DATABASES_FILE:-/app/databases.yaml}"
 
       # Set to share one HS256 key across instances; By default: generated and
@@ -35,7 +36,8 @@ services:
         source: ./data
         target: /data
 
-      # Your databases connectors (see databases.example.yml for reference)
+      # Your database connectors (see databases.example.yml for reference). Create
+      # this file first (e.g. `cp databases.example.yml databases.yml`)
       - type: bind
         source: ./databases.yml
         target: /app/databases.yml

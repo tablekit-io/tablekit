@@ -3,6 +3,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,38 @@ func Load() *Config {
 		AccessTTL:     durationOrDefault("ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:    durationOrDefault("REFRESH_TTL", 7*24*time.Hour),
 	}
+}
+
+// ResolveDatabasesFile resolves the databases config path by base name, ignoring
+// the extension: given a configured path (from DATABASES_FILE or the default), it
+// accepts either <base>.yaml or <base>.yml, so a mount/env `.yml` vs `.yaml`
+// mismatch still finds the file. If BOTH extensions exist the config is ambiguous
+// and it returns an error (the caller fails startup). If neither exists it returns
+// the configured path unchanged, so the loader treats it as "no databases".
+func ResolveDatabasesFile(configured string) (string, error) {
+	base := strings.TrimSuffix(strings.TrimSuffix(configured, ".yaml"), ".yml")
+	yamlPath := base + ".yaml"
+	ymlPath := base + ".yml"
+
+	yamlExists := fileExists(yamlPath)
+	ymlExists := fileExists(ymlPath)
+
+	switch {
+	case yamlExists && ymlExists:
+		return "", fmt.Errorf("ambiguous databases config: both %q and %q exist; keep only one", yamlPath, ymlPath)
+	case yamlExists:
+		return yamlPath, nil
+	case ymlExists:
+		return ymlPath, nil
+	default:
+		return configured, nil
+	}
+}
+
+// fileExists reports whether path names an existing regular file (not a directory).
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func envOrDefault(key, fallback string) string {

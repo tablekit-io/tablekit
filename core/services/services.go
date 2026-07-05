@@ -34,7 +34,14 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
-	engineService, err := engine.Load(configService.DatabasesFile, engine.Limits{
+	// Resolve .yaml/.yml by base name (dies if both exist), then remember the
+	// resolved path so the app reports what it actually loaded.
+	resolvedDatabasesFile, err := config.ResolveDatabasesFile(configService.DatabasesFile)
+	if err != nil {
+		return nil, err
+	}
+	configService.DatabasesFile = resolvedDatabasesFile
+	engineService, err := engine.Load(resolvedDatabasesFile, engine.Limits{
 		StatementTimeout: 10 * time.Second,
 		MaxRows:          2048,
 		MaxBytes:         64 * 1024,

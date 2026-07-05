@@ -1,10 +1,13 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -43,6 +46,64 @@ func TestLoadOverrides(t *testing.T) {
 	assert.Equal(t, 30*time.Second, configService.AccessTTL)
 	assert.Equal(t, 48*time.Hour, configService.RefreshTTL)
 	assert.Equal(t, "https://mcp.example.com", configService.PublicBaseURL)
+}
+
+func TestResolveDatabasesFile(t *testing.T) {
+	write := func(t *testing.T, path string) {
+		require.NoError(t, os.WriteFile(path, []byte("databases: {}\n"), 0o600))
+	}
+
+	t.Run("only .yaml present is used", func(t *testing.T) {
+		dir := t.TempDir()
+		yamlPath := filepath.Join(dir, "databases.yaml")
+		write(t, yamlPath)
+
+		// Configured hint carries the .yml extension; resolution ignores it.
+		resolved, err := ResolveDatabasesFile(filepath.Join(dir, "databases.yml"))
+		require.NoError(t, err)
+		assert.Equal(t, yamlPath, resolved)
+	})
+
+	t.Run("only .yml present is used", func(t *testing.T) {
+		dir := t.TempDir()
+		ymlPath := filepath.Join(dir, "databases.yml")
+		write(t, ymlPath)
+
+		// Configured hint carries the .yaml extension; resolution ignores it.
+		resolved, err := ResolveDatabasesFile(filepath.Join(dir, "databases.yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, ymlPath, resolved)
+	})
+
+	t.Run("both present is a fatal error", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "databases.yaml"))
+		write(t, filepath.Join(dir, "databases.yml"))
+
+		_, err := ResolveDatabasesFile(filepath.Join(dir, "databases.yaml"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "databases.yaml")
+		assert.Contains(t, err.Error(), "databases.yml")
+	})
+
+	t.Run("neither present returns the configured path unchanged", func(t *testing.T) {
+		dir := t.TempDir()
+		configured := filepath.Join(dir, "databases.yaml")
+
+		resolved, err := ResolveDatabasesFile(configured)
+		require.NoError(t, err)
+		assert.Equal(t, configured, resolved)
+	})
+
+	t.Run("configured hint without extension resolves either", func(t *testing.T) {
+		dir := t.TempDir()
+		ymlPath := filepath.Join(dir, "databases.yml")
+		write(t, ymlPath)
+
+		resolved, err := ResolveDatabasesFile(filepath.Join(dir, "databases"))
+		require.NoError(t, err)
+		assert.Equal(t, ymlPath, resolved)
+	})
 }
 
 func TestLoadBadDurationFallsBack(t *testing.T) {
