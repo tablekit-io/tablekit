@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync/atomic"
 
 	"core/engine/config"
 	"core/engine/driver/mysql"
@@ -55,10 +56,12 @@ func engineFor(dbType config.DatabaseType) (databaseEngine, error) {
 	}
 }
 
-// Service holds the resolved databases and the query limits. It is immutable
-// after Load, so it is safe to share and call concurrently.
+// Service holds the resolved databases and the query limits. The database set is
+// held behind an atomic pointer so Reload can swap it in place while queries run:
+// reads take a snapshot, a reload is a single atomic store, so the Service stays
+// safe to share and call concurrently. The limits are fixed after Load.
 type Service struct {
-	databases map[string]config.Database
+	databases atomic.Pointer[map[string]config.Database]
 	limits    config.Limits
 }
 
@@ -70,7 +73,29 @@ func Load(path string, limits Limits) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{databases: databases, limits: limits.WithDefaults()}, nil
+	service := &Service{limits: limits.WithDefaults()}
+	service.databases.Store(&databases)
+	return service, nil
+}
+
+// Reload re-reads the databases YAML at path and swaps the database set in place.
+// On any read/parse/validation error it returns the error and leaves the current
+// set untouched, so a half-written or invalid file never takes down a running
+// server. On success the new set is visible to every subsequent RunReadOnly /
+// RunReadOnlyPage / List call.
+func (s *Service) Reload(path string) error {
+	databases, err := config.Load(path)
+	if err != nil {
+		return err
+	}
+	s.databases.Store(&databases)
+	return nil
+}
+
+// snapshot returns the current database set. The returned map is never mutated in
+// place (Reload swaps a fresh map), so callers may read it without locking.
+func (s *Service) snapshot() map[string]config.Database {
+	return *s.databases.Load()
 }
 
 // RunReadOnly runs query against the named database inside a read-only
@@ -78,7 +103,7 @@ func Load(path string, limits Limits) (*Service, error) {
 // engine implementation for the database's type; the caller never learns which
 // driver, tunnel or TLS settings were used.
 func (s *Service) RunReadOnly(ctx context.Context, databaseName, query string) (*Result, error) {
-	db, ok := s.databases[databaseName]
+	db, ok := s.snapshot()[databaseName]
 	if !ok {
 		return nil, fmt.Errorf("unknown database %q", databaseName)
 	}
@@ -108,7 +133,7 @@ type PageOptions struct {
 // round-trip; the extra row is trimmed before returning. Like RunReadOnly it
 // executes inside a read-only transaction under the statement timeout.
 func (s *Service) RunReadOnlyPage(ctx context.Context, databaseName, query string, opts PageOptions) (result *Result, hasMore bool, err error) {
-	db, ok := s.databases[databaseName]
+	db, ok := s.snapshot()[databaseName]
 	if !ok {
 		return nil, false, fmt.Errorf("unknown database %q", databaseName)
 	}
@@ -139,8 +164,9 @@ func (s *Service) RunReadOnlyPage(ctx context.Context, databaseName, query strin
 
 // List returns the configured databases, name and type only, sorted by name.
 func (s *Service) List() []DatabaseInfo {
-	infos := make([]DatabaseInfo, 0, len(s.databases))
-	for name, db := range s.databases {
+	databases := s.snapshot()
+	infos := make([]DatabaseInfo, 0, len(databases))
+	for name, db := range databases {
 		infos = append(infos, DatabaseInfo{Name: name, Type: string(db.Type)})
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })

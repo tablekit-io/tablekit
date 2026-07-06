@@ -52,3 +52,51 @@ func TestLoadMissingFileTolerated(t *testing.T) {
 	assert.Empty(t, svc.List())
 }
 
+// names returns the sorted database names from List, so a reload's effect can be
+// asserted without caring about type.
+func names(infos []DatabaseInfo) []string {
+	out := make([]string, len(infos))
+	for i, info := range infos {
+		out[i] = info.Name
+	}
+	return out
+}
+
+func TestReloadSwapsDatabases(t *testing.T) {
+	path := writeYAML(t, `
+databases:
+  pg:
+    type: postgres
+    details: { host: pg.internal, username: app_ro }
+`)
+	svc, err := Load(path, Limits{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pg"}, names(svc.List()))
+
+	// Rewrite the file to a different set, then reload in place.
+	require.NoError(t, os.WriteFile(path, []byte(`
+databases:
+  my:
+    type: mysql
+    details: { host: my.internal, username: reader }
+`), 0o600))
+	require.NoError(t, svc.Reload(path))
+	assert.Equal(t, []string{"my"}, names(svc.List()))
+}
+
+func TestReloadInvalidKeepsPrevious(t *testing.T) {
+	path := writeYAML(t, `
+databases:
+  pg:
+    type: postgres
+    details: { host: pg.internal, username: app_ro }
+`)
+	svc, err := Load(path, Limits{})
+	require.NoError(t, err)
+
+	// A malformed file must not clobber the working set.
+	require.NoError(t, os.WriteFile(path, []byte("databases: [not-a-map"), 0o600))
+	require.Error(t, svc.Reload(path))
+	assert.Equal(t, []string{"pg"}, names(svc.List()))
+}
+
