@@ -131,6 +131,28 @@ func TestChartToolsAdvertiseEnums(t *testing.T) {
 	assert.Equal(t, "donut", display["default"])
 }
 
+// TestChartToolsAdvertiseValuePrefixSuffix asserts the value_prefix/value_suffix
+// formatting fields reach the wire: the donut tool's top-level pair, and the
+// cartesian tool's chart-root fallback plus its per-series overrides.
+func TestChartToolsAdvertiseValuePrefixSuffix(t *testing.T) {
+	clientSession := connectInMemory(t)
+	tools := toolsByName(t, clientSession)
+
+	// show_pie_donut_sunburst_chart: top-level value_prefix/value_suffix.
+	pieProps := marshalToMap(t, tools["show_pie_donut_sunburst_chart"].InputSchema)["properties"].(map[string]any)
+	assert.Equal(t, "string", pieProps["value_prefix"].(map[string]any)["type"])
+	assert.Equal(t, "string", pieProps["value_suffix"].(map[string]any)["type"])
+
+	// show_bar_line_area_chart: chart-root fallback and per-series overrides.
+	barProps := marshalToMap(t, tools["show_bar_line_area_chart"].InputSchema)["properties"].(map[string]any)
+	assert.Equal(t, "string", barProps["value_prefix"].(map[string]any)["type"])
+	assert.Equal(t, "string", barProps["value_suffix"].(map[string]any)["type"])
+
+	series := barProps["y"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	assert.Equal(t, "string", series["value_prefix"].(map[string]any)["type"])
+	assert.Equal(t, "string", series["value_suffix"].(map[string]any)["type"])
+}
+
 // marshalToMap round-trips a tool's InputSchema (whatever concrete type the SDK
 // used) through JSON into a generic map for structural assertions.
 func marshalToMap(t *testing.T, schema any) map[string]any {

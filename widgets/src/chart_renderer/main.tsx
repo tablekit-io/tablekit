@@ -148,7 +148,43 @@ const ChartView = ({
                             <YAxis tickLine={false} axisLine={false} />
                         </>
                     )}
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartTooltip
+                        content={
+                            <ChartTooltipContent
+                                // Format each series' value with its
+                                // value_prefix/value_suffix (or the chart-root
+                                // fallback); the series is resolved via the
+                                // payload item's dataKey.
+                                formatter={(value, name, item) => {
+                                    const series = model.series.find(
+                                        (s) => s.key === item?.dataKey,
+                                    );
+                                    return (
+                                        <span className="flex w-full items-center gap-2">
+                                            <span
+                                                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                                                style={{
+                                                    backgroundColor: series?.color,
+                                                }}
+                                            />
+                                            <span className="flex flex-1 items-center justify-between gap-3">
+                                                <span className="text-muted-foreground">
+                                                    {String(name)}
+                                                </span>
+                                                <span className="font-medium tabular-nums text-foreground">
+                                                    {series
+                                                        ? series.format(
+                                                              Number(value),
+                                                          )
+                                                        : String(value)}
+                                                </span>
+                                            </span>
+                                        </span>
+                                    );
+                                }}
+                            />
+                        }
+                    />
                     <ChartLegend content={<ChartLegendContent />} />
                     {model.series.map((s) =>
                         s.kind === 'bar' ? (
