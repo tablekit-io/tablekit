@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "properties": {
+    "query_key": {
+      "type": "string",
+      "description": "the result_key returned by query_database"
+    },
+    "flip_axes": {
+      "type": "boolean",
+      "description": "draw the chart horizontally when true"
+    },
+    "x": {
+      "type": "object",
+      "description": "the X/category axis mapping",
+      "properties": {
+        "prop": {
+          "type": "string",
+          "description": "the result column for the X/category axis"
+        },
+        "axes_label": {
+          "type": "string",
+          "description": "the X axis label"
+        }
+      },
+      "required": ["prop", "axes_label"]
+    },
+    "y": {
+      "type": "array",
+      "description": "one or more Y/value series to plot (at least one)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "prop": {
+            "type": "string",
+            "description": "the result column for this Y/value series"
+          },
+          "axes_label": {
+            "type": "string",
+            "description": "the legend + axis label for this series"
+          },
+          "display_as": {
+            "type": "string",
+            "enum": ["line", "area", "bar"],
+            "description": "how to draw this series (default bar)"
+          },
+          "shape": {
+            "type": "string",
+            "enum": ["line", "discrete", "curve"],
+            "description": "line shape (default discrete; ignored for bars)"
+          },
+          "color_hue": {
+            "type": "number",
+            "description": "hue 0-360; omit for a stable auto hue derived from axes_label"
+          },
+          "stack_group": {
+            "type": "string",
+            "description": "series sharing a stack_group are stacked; others sit side by side"
+          }
+        },
+        "required": ["prop", "axes_label"]
+      }
+    }
+  },
+  "required": ["query_key", "x", "y"]
+}

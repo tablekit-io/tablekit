@@ -1,12 +1,20 @@
-// Package handlers holds the MCP tools this server exposes, one tool per file,
-// plus the registration that wires them (and the built widget UI resources)
-// onto an mcp.Server.
+// Package handlers wires the MCP tools this server exposes — one package per
+// tool under this directory — plus the built widget UI resources, onto an
+// mcp.Server. The tools share dependencies and helpers via the shared package.
 package handlers
 
 import (
 	"context"
 
 	"core/engine"
+	fetchchartdata "core/mcp/handlers/fetch_chart_data"
+	getexporturl "core/mcp/handlers/get_export_url"
+	listavailabledatabases "core/mcp/handlers/list_available_databases"
+	querydatabase "core/mcp/handlers/query_database"
+	readresults "core/mcp/handlers/read_results"
+	"core/mcp/handlers/shared"
+	showbarlineareachart "core/mcp/handlers/show_bar_line_area_chart"
+	showpiedonutsunburstchart "core/mcp/handlers/show_pie_donut_sunburst_chart"
 	"core/mcp/ui"
 	"core/services/oauth"
 	"core/services/queries"
@@ -19,31 +27,28 @@ import (
 // URLs) and the public base URL those URLs are built against. Construct with New
 // and wire with Register.
 type Handlers struct {
-	Engine        *engine.Service
-	Queries       queries.QueryRepository
-	Issuer        *oauth.Issuer
-	PublicBaseURL string
+	deps shared.Deps
 }
 
 // New wires the MCP tool handlers to their dependencies.
 func New(engineService *engine.Service, queriesRepo queries.QueryRepository, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
-	return &Handlers{
+	return &Handlers{deps: shared.Deps{
 		Engine:        engineService,
 		Queries:       queriesRepo,
 		Issuer:        issuer,
 		PublicBaseURL: publicBaseURL,
-	}
+	}}
 }
 
 // Register wires every tool and the built widget UI resources onto s.
 func (h *Handlers) Register(s *mcp.Server) {
-	h.registerListAvailableDatabases(s)
-	h.registerQueryDatabase(s)
-	h.registerReadResults(s)
-	h.registerFetchChartData(s)
-	h.registerShowBarLineAreaChart(s)
-	h.registerShowPieDonutSunburstChart(s)
-	h.registerGetExportURL(s)
+	listavailabledatabases.Register(s, h.deps)
+	querydatabase.Register(s, h.deps)
+	readresults.Register(s, h.deps)
+	fetchchartdata.Register(s, h.deps)
+	showbarlineareachart.Register(s, h.deps)
+	showpiedonutsunburstchart.Register(s, h.deps)
+	getexporturl.Register(s, h.deps)
 	registerWidgetResources(s)
 }
 

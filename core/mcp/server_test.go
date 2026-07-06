@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -108,6 +109,37 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 			assert.Contains(t, uri, "ui://tablekit/chart_renderer-")
 		}
 	}
+}
+
+// TestChartToolsAdvertiseEnums confirms the hand-written schema files reach the
+// wire: the enum constraints the Go structs can't express (they are plain
+// strings) show up in the advertised input schema clients see.
+func TestChartToolsAdvertiseEnums(t *testing.T) {
+	clientSession := connectInMemory(t)
+	tools := toolsByName(t, clientSession)
+
+	// show_bar_line_area_chart: y[].display_as and y[].shape.
+	barSchema := marshalToMap(t, tools["show_bar_line_area_chart"].InputSchema)
+	series := barSchema["properties"].(map[string]any)["y"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	assert.ElementsMatch(t, []any{"line", "area", "bar"}, series["display_as"].(map[string]any)["enum"])
+	assert.ElementsMatch(t, []any{"line", "discrete", "curve"}, series["shape"].(map[string]any)["enum"])
+
+	// show_pie_donut_sunburst_chart: display.
+	pieSchema := marshalToMap(t, tools["show_pie_donut_sunburst_chart"].InputSchema)
+	display := pieSchema["properties"].(map[string]any)["display"].(map[string]any)
+	assert.ElementsMatch(t, []any{"pie", "donut"}, display["enum"])
+}
+
+// marshalToMap round-trips a tool's InputSchema (whatever concrete type the SDK
+// used) through JSON into a generic map for structural assertions.
+func marshalToMap(t *testing.T, schema any) map[string]any {
+	t.Helper()
+	require.NotNil(t, schema)
+	raw, err := json.Marshal(schema)
+	require.NoError(t, err)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(raw, &out))
+	return out
 }
 
 func TestWidgetResourceIsServed(t *testing.T) {

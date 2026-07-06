@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "query_key": {
+      "type": "string",
+      "description": "the result_key returned by query_database"
+    },
+    "display": {
+      "type": "string",
+      "enum": ["pie", "donut"],
+      "description": "pie or donut (default donut)"
+    },
+    "value_prop": {
+      "type": "string",
+      "description": "the column holding the numeric value of each slice"
+    },
+    "value_prefix": {
+      "type": "string",
+      "description": "text shown before each value, e.g. \"$\""
+    },
+    "value_suffix": {
+      "type": "string",
+      "description": "text shown after each value, e.g. \"%\" or \" users\""
+    },
+    "layers": {
+      "type": "array",
+      "description": "one or more grouping layers, innermost ring first (at least one)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "discriminator_prop": {
+            "type": "string",
+            "description": "the column whose distinct values become slices (values are summed per group)"
+          }
+        },
+        "required": ["discriminator_prop"]
+      }
+    }
+  },
+  "required": ["query_key", "value_prop", "layers"]
+}

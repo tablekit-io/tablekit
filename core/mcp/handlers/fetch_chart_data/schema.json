@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "query_key": {
+      "type": "string",
+      "description": "the result_key returned by query_database"
+    }
+  },
+  "required": ["query_key"]
+}

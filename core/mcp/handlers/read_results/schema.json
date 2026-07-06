@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "the result_key returned by query_database"
+    },
+    "skip": {
+      "type": "integer",
+      "description": "number of leading rows to skip (OFFSET); defaults to 0"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "maximum rows in this window; defaults to 128, hard max = 2048"
+    },
+    "columns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "optional subset of column names to return, in the given order"
+    }
+  },
+  "required": ["key"]
+}

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "query_key": {
+      "type": "string",
+      "description": "the result_key returned by query_database"
+    },
+    "format": {
+      "type": "string",
+      "enum": ["csv", "json"],
+      "description": "the export format: \"csv\" or \"json\""
+    }
+  },
+  "required": ["query_key", "format"]
+}

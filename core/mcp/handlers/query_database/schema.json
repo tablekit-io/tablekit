@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "database": {
+      "type": "string",
+      "description": "name of the database to query (see list_available_databases)"
+    },
+    "sql": {
+      "type": "string",
+      "description": "the read-only SQL (SELECT / WITH ... SELECT) to execute; no writes. Annotate it with concise -- comments explaining what each ambiguous part does and why, since the stored SQL is read by human reviewers"
+    },
+    "description": {
+      "type": "string",
+      "description": "required, concise plain-language description of what this query is about and why it is being run"
+    },
+    "include_results": {
+      "type": "boolean",
+      "description": "when true, inline the first page of rows in the result (only do this for small result sets)"
+    }
+  },
+  "required": ["database", "sql", "description"]
+}
