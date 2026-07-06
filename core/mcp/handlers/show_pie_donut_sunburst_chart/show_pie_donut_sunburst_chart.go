@@ -37,7 +37,7 @@ type input struct {
 func Register(s *mcp.Server, deps shared.Deps) {
 	tool := &mcp.Tool{
 		Name:        "show_pie_donut_sunburst_chart",
-		Description: "Use this for pie or donut charts. Shows a proportional chart visualization widget for a result_key received from query_database. Both chart types support stacking, stacking will result in a sunburst chart. Needs the value column and one or more grouping layers (inner-most ring first). Pass the result_key from query_database along with the columns & grouping. The chart widget loads the rows itself using the result_key. Note: users can view original SQL in the rendered chart widget, also the table of data which they can download as JSON or CSV.",
+		Description: "Use this for donut or pie charts. Shows a proportional chart visualization widget for a result_key received from query_database. Both chart types support stacking, stacking will result in a sunburst chart. Needs the value column and one or more grouping layers (inner-most ring first). Pass the result_key from query_database along with the columns & grouping. The chart widget loads the rows itself using the result_key. Note: users can view original SQL in the rendered chart widget, also the table of data which they can download as JSON or CSV.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			DestructiveHint: helpers.Pointer(false),

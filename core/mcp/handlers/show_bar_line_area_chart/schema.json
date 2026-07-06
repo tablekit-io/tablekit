@@ -9,6 +9,14 @@
       "type": "boolean",
       "description": "draw the chart horizontally when true"
     },
+    "value_prefix": {
+      "type": "string",
+      "description": "text shown before each value, e.g. \"$\"; the fallback for series that don't set their own value_prefix"
+    },
+    "value_suffix": {
+      "type": "string",
+      "description": "text shown after each value, e.g. \"%\" or \" users\"; the fallback for series that don't set their own value_suffix"
+    },
     "x": {
       "type": "object",
       "description": "the X/category axis mapping",
@@ -37,6 +45,14 @@
           "axes_label": {
             "type": "string",
             "description": "the legend + axis label for this series"
+          },
+          "value_prefix": {
+            "type": "string",
+            "description": "text shown before this series' values, e.g. \"$\"; overrides the chart-root value_prefix"
+          },
+          "value_suffix": {
+            "type": "string",
+            "description": "text shown after this series' values, e.g. \"%\" or \" users\"; overrides the chart-root value_suffix"
           },
           "display_as": {
             "type": "string",

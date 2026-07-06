@@ -7,8 +7,9 @@
     },
     "display": {
       "type": "string",
-      "enum": ["pie", "donut"],
-      "description": "pie or donut (default donut)"
+      "enum": ["donut", "pie"],
+      "default": "donut",
+      "description": "donut or pie (default donut)"
     },
     "value_prop": {
       "type": "string",

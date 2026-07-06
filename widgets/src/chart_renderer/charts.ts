@@ -12,10 +12,14 @@ export type Row = Record<string, unknown>;
 export type CartesianInput = {
     readonly query_key: string;
     readonly flip_axes?: boolean;
+    readonly value_prefix?: string;
+    readonly value_suffix?: string;
     readonly x: {readonly prop: string; readonly axes_label: string};
     readonly y: ReadonlyArray<{
         readonly prop: string;
         readonly axes_label: string;
+        readonly value_prefix?: string;
+        readonly value_suffix?: string;
         readonly display_as?: 'line' | 'area' | 'bar';
         readonly shape?: 'line' | 'discrete' | 'curve';
         readonly color_hue?: number;
@@ -61,6 +65,9 @@ export type CartesianSeries = {
     readonly type: 'monotone' | 'linear';
     readonly stackId?: string;
     readonly color: string;
+    // Formats this series' values for the tooltip, applying the series'
+    // value_prefix/value_suffix or the chart-root fallback (prefix/suffix).
+    readonly format: (value: number) => string;
 };
 
 export type CartesianModel = {
@@ -88,19 +95,24 @@ export function toCartesianModel(
         return copy;
     });
 
-    const series: CartesianSeries[] = input.y.map((s, i) => ({
-        key: s.prop,
-        label: s.axes_label || s.prop,
-        kind:
-            s.display_as === 'line'
-                ? 'line'
-                : s.display_as === 'area'
-                  ? 'area'
-                  : 'bar',
-        type: s.shape === 'curve' ? 'monotone' : 'linear',
-        stackId: s.stack_group || undefined,
-        color: colorAt(i, s.color_hue),
-    }));
+    const series: CartesianSeries[] = input.y.map((s, i) => {
+        const prefix = s.value_prefix ?? input.value_prefix ?? '';
+        const suffix = s.value_suffix ?? input.value_suffix ?? '';
+        return {
+            key: s.prop,
+            label: s.axes_label || s.prop,
+            kind:
+                s.display_as === 'line'
+                    ? 'line'
+                    : s.display_as === 'area'
+                      ? 'area'
+                      : 'bar',
+            type: s.shape === 'curve' ? 'monotone' : 'linear',
+            stackId: s.stack_group || undefined,
+            color: colorAt(i, s.color_hue),
+            format: (value: number): string => `${prefix}${value}${suffix}`,
+        };
+    });
 
     const config: ChartConfig = Object.fromEntries(
         series.map((s) => [s.key, {label: s.label, color: s.color}]),

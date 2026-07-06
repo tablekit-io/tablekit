@@ -128,6 +128,7 @@ func TestChartToolsAdvertiseEnums(t *testing.T) {
 	pieSchema := marshalToMap(t, tools["show_pie_donut_sunburst_chart"].InputSchema)
 	display := pieSchema["properties"].(map[string]any)["display"].(map[string]any)
 	assert.ElementsMatch(t, []any{"pie", "donut"}, display["enum"])
+	assert.Equal(t, "donut", display["default"])
 }
 
 // marshalToMap round-trips a tool's InputSchema (whatever concrete type the SDK

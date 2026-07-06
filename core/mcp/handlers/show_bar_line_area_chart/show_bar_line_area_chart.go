@@ -24,21 +24,25 @@ type cartesianAxis struct {
 
 // cartesianSeries maps a result column to one Y series with its display options.
 type cartesianSeries struct {
-	Prop       string  `json:"prop"`
-	AxesLabel  string  `json:"axes_label"`
-	DisplayAs  string  `json:"display_as,omitempty"`
-	Shape      string  `json:"shape,omitempty"`
-	ColorHue   float64 `json:"color_hue,omitempty"`
-	StackGroup string  `json:"stack_group,omitempty"`
+	Prop        string  `json:"prop"`
+	AxesLabel   string  `json:"axes_label"`
+	ValuePrefix string  `json:"value_prefix,omitempty"`
+	ValueSuffix string  `json:"value_suffix,omitempty"`
+	DisplayAs   string  `json:"display_as,omitempty"`
+	Shape       string  `json:"shape,omitempty"`
+	ColorHue    float64 `json:"color_hue,omitempty"`
+	StackGroup  string  `json:"stack_group,omitempty"`
 }
 
 // input is the show_bar_line_area_chart tool's argument schema. Descriptions and
 // the display_as/shape enums live in schema.json; the struct only decodes.
 type input struct {
-	QueryKey string            `json:"query_key"`
-	FlipAxes bool              `json:"flip_axes,omitempty"`
-	X        cartesianAxis     `json:"x"`
-	Y        []cartesianSeries `json:"y"`
+	QueryKey    string            `json:"query_key"`
+	FlipAxes    bool              `json:"flip_axes,omitempty"`
+	ValuePrefix string            `json:"value_prefix,omitempty"`
+	ValueSuffix string            `json:"value_suffix,omitempty"`
+	X           cartesianAxis     `json:"x"`
+	Y           []cartesianSeries `json:"y"`
 }
 
 // Register adds the bar/line/area chart tool, linking the shared chart widget.
