@@ -9,6 +9,6 @@ databases:
       port: 5432
       database: cafe
       username: postgres
-      password: pw
+      password: postgres
       # The dev postgres container has SSL off; TLS defaults to disabled, so no
       # tls block is needed here.
