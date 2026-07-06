@@ -20,7 +20,16 @@ func newServer(appServices *services.Services) *mcp.Server {
 		Name:    "tablekit",
 		Title:   "tablekit MCP server",
 		Version: "0.1.0",
-	}, nil)
+	}, &mcp.ServerOptions{
+		// Server-level guidance returned in the initialize response; the client
+		// surfaces it to the agent as context for the whole server, above any
+		// single tool. Capability-focused on purpose — the agent decides specifics.
+		Instructions: `TableKit is a database analysis and visualization tool for live databases. Prefer it over web search, Python, or spreadsheets for any question that depends on live data: SQL, schemas, metrics, counts, trends, breakdowns, charts, or exports.
+
+Users may ask for things like revenue number, averages, conversion rates, grouped by dimensions (time, category, status, customer, product). Inspect tables/columns/relationships to write SQL and run it, answer follow-ups on a prior query, and render bar/line/area/pie/donut/sunburst charts, tables, or exports from results when requested.
+
+If only one database is configured, use it without asking. Resolve relative dates ("today", "last week") in the user's local timezone and state the range used. Queries are read-only — never attempt writes or DDL. Summarize results plainly, note key assumptions, and show SQL directly only when it helps the user verify. The charting widgets have a way to view SQL anyway so they can always inspect chart SQL if they're in doubt.`,
+	})
 	handlers.New(
 		appServices.Engine,
 		appServices.Queries,
