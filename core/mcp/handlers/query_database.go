@@ -33,13 +33,13 @@ type queryDatabaseInput struct {
 // queryDatabaseOutput is query_database's structured result: stats plus the result_key
 // the other tools take. Rows are inlined only when include_results was set.
 type queryDatabaseOutput struct {
-	ResultKey     string           `json:"result_key" jsonschema:"the key identifying this stored query; pass it to read_results, show_bar_line_area_chart or show_pie_donut_sunburst_chart"`
-	RowCount      int              `json:"row_count" jsonschema:"number of rows in this first page (at most default_limit)"`
-	HasMore       bool             `json:"has_more" jsonschema:"true when more rows exist beyond this first page"`
-	DefaultLimit  int              `json:"default_limit" jsonschema:"the page size read_results uses by default"`
-	Columns       []columnInfo     `json:"columns" jsonschema:"the result columns, in order"`
-	Rows          []map[string]any `json:"rows,omitempty" jsonschema:"the first page of rows, only present when include_results was set"`
-	HintForAgents string           `json:"hint_for_agents,omitempty" jsonschema:"guidance for the calling agent on how best to use this result"`
+	ResultKey        string           `json:"result_key" jsonschema:"the key identifying this stored query; pass it to read_results, show_bar_line_area_chart or show_pie_donut_sunburst_chart"`
+	RowCount         int              `json:"row_count" jsonschema:"number of rows in this first page (at most default_limit)"`
+	HasMore          bool             `json:"has_more" jsonschema:"true when more rows exist beyond this first page"`
+	DefaultLimit     int              `json:"default_limit" jsonschema:"the page size read_results uses by default"`
+	Columns          []columnInfo     `json:"columns" jsonschema:"the result columns, in order"`
+	Rows             []map[string]any `json:"rows,omitempty" jsonschema:"the first page of rows, only present when include_results was set"`
+	HintsForAIAgents []string         `json:"hints_for_ai_agents,omitempty" jsonschema:"guidance for the calling AI agent on how best to use this result"`
 }
 
 // queryDatabase executes read-only SQL, stores the query descriptor, and returns a
@@ -77,7 +77,7 @@ func (h *Handlers) queryDatabase(ctx context.Context, _ *mcp.CallToolRequest, in
 	// chart tools (same as read_results).
 	if in.IncludeResults {
 		out.Rows = result.Rows
-		out.HintForAgents = chartHint
+		out.HintsForAIAgents = []string{chartHint}
 		summary += " " + chartHint
 	}
 

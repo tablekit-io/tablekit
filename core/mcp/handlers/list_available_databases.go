@@ -15,7 +15,8 @@ type listAvailableDatabasesInput struct{}
 
 // listAvailableDatabasesOutput is the set of configured databases, name and type only.
 type listAvailableDatabasesOutput struct {
-	Databases []engine.DatabaseInfo `json:"databases" jsonschema:"lists the databases available to you, includes name and database type (like postgres, mysql, mariadb, etc)"`
+	Databases        []engine.DatabaseInfo `json:"databases" jsonschema:"lists the databases available to you, includes name and database type (like postgres, mysql, mariadb, etc)"`
+	HintsForAIAgents []string              `json:"hints_for_ai_agents,omitempty" jsonschema:"guidance for the calling AI agent on how best to use this result"`
 }
 
 // listAvailableDatabases returns the databases query_database can run against. It

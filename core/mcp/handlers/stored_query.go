@@ -13,7 +13,8 @@ import (
 // shares no state with the agent: it reads the render tool's arguments from the
 // host and loads rows via fetch_chart_data, so the tool only names itself.
 type chartRenderOutput struct {
-	Tool string `json:"tool" jsonschema:"the tool that produced this result"`
+	Tool             string   `json:"tool" jsonschema:"the tool that produced this result"`
+	HintsForAIAgents []string `json:"hints_for_ai_agents,omitempty" jsonschema:"guidance for the calling AI agent on how best to use this result"`
 }
 
 // requireQuery confirms a stored query exists for key, turning an unknown key
@@ -47,7 +48,7 @@ const (
 
 // chartHint nudges the agent toward the dedicated chart tools whenever it has
 // rows in hand (query_database with include_results, or read_results). Surfaced
-// both as a structured hint_for_agents field and appended to the text content so
+// both as a structured hints_for_ai_agents field and appended to the text content so
 // it is seen regardless of how the client reads the result. The goal is
 // consistent tablekit visualizations users can build muscle memory around,
 // rather than the agent hand-formatting charts itself.

@@ -19,14 +19,14 @@ type readResultsInput struct {
 
 // readResultsOutput is one paginated window of a stored query's rows.
 type readResultsOutput struct {
-	Skip          int              `json:"skip" jsonschema:"the offset this window started at"`
-	Limit         int              `json:"limit" jsonschema:"the page size used for this window"`
-	Columns       []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
-	Rows          []map[string]any `json:"rows" jsonschema:"the rows in this window"`
-	RowsReturned  int              `json:"rows_returned" jsonschema:"number of rows in this window"`
-	HasMore       bool             `json:"has_more" jsonschema:"true when more rows exist beyond this window"`
-	NextSkip      *int             `json:"next_skip" jsonschema:"the skip to pass for the next window, or null when this is the last window"`
-	HintForAgents string           `json:"hint_for_agents,omitempty" jsonschema:"guidance for the calling agent on how best to use this result"`
+	Skip             int              `json:"skip" jsonschema:"the offset this window started at"`
+	Limit            int              `json:"limit" jsonschema:"the page size used for this window"`
+	Columns          []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
+	Rows             []map[string]any `json:"rows" jsonschema:"the rows in this window"`
+	RowsReturned     int              `json:"rows_returned" jsonschema:"number of rows in this window"`
+	HasMore          bool             `json:"has_more" jsonschema:"true when more rows exist beyond this window"`
+	NextSkip         *int             `json:"next_skip" jsonschema:"the skip to pass for the next window, or null when this is the last window"`
+	HintsForAIAgents []string         `json:"hints_for_ai_agents,omitempty" jsonschema:"guidance for the calling AI agent on how best to use this result"`
 }
 
 // readResults pages through a stored query's rows. It re-runs the stored SQL at the
@@ -64,14 +64,14 @@ func (h *Handlers) readResults(ctx context.Context, _ *mcp.CallToolRequest, in r
 	}
 
 	out := readResultsOutput{
-		Skip:          skip,
-		Limit:         limit,
-		Columns:       columns,
-		Rows:          rows,
-		RowsReturned:  len(rows),
-		HasMore:       hasMore,
-		NextSkip:      nextSkip,
-		HintForAgents: chartHint,
+		Skip:             skip,
+		Limit:            limit,
+		Columns:          columns,
+		Rows:             rows,
+		RowsReturned:     len(rows),
+		HasMore:          hasMore,
+		NextSkip:         nextSkip,
+		HintsForAIAgents: []string{chartHint},
 	}
 	summary := fmt.Sprintf("Rows %d–%d of stored query %s: %d row(s)%s. %s",
 		skip, skip+len(rows), in.Key, len(rows), moreSuffix(hasMore), chartHint)
