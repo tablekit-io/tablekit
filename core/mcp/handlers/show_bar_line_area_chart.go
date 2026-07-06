@@ -32,34 +32,33 @@ type cartesianSeries struct {
 	StackGroup string  `json:"stack_group,omitempty" jsonschema:"series sharing a stack_group are stacked; others sit side by side"`
 }
 
-// renderCartesianInput is the render_cartesian_series_chart tool's argument schema.
-type renderCartesianInput struct {
-	QueryKey string            `json:"query_key" jsonschema:"the result_key returned by run_query"`
+// showBarLineAreaChartInput is the show_bar_line_area_chart tool's argument schema.
+type showBarLineAreaChartInput struct {
+	QueryKey string            `json:"query_key" jsonschema:"the result_key returned by query_database"`
 	FlipAxes bool              `json:"flip_axes,omitempty" jsonschema:"draw the chart horizontally when true"`
 	X        cartesianAxis     `json:"x" jsonschema:"the X/category axis mapping"`
 	Y        []cartesianSeries `json:"y" jsonschema:"one or more Y/value series to plot (at least one)"`
 }
 
-// renderCartesianSeriesChart renders the stored query as a cartesian (bar/line/
-// area) chart. Like the donut demo the structured result is only a discriminator:
-// the linked widget reads this tool's arguments and loads its own data via the
-// app-only fetch_chart_data.
-func (h *Handlers) renderCartesianSeriesChart(ctx context.Context, _ *mcp.CallToolRequest, in renderCartesianInput) (*mcp.CallToolResult, chartRenderOutput, error) {
+// showBarLineAreaChart renders the stored query as a bar/line/area chart. Like the
+// donut demo the structured result is only a discriminator: the linked widget reads
+// this tool's arguments and loads its own data via the app-only fetch_chart_data.
+func (h *Handlers) showBarLineAreaChart(ctx context.Context, _ *mcp.CallToolRequest, in showBarLineAreaChartInput) (*mcp.CallToolResult, chartRenderOutput, error) {
 	if len(in.Y) == 0 {
 		return nil, chartRenderOutput{}, fmt.Errorf("at least one y series is required")
 	}
 	if err := h.requireQuery(ctx, in.QueryKey); err != nil {
 		return nil, chartRenderOutput{}, err
 	}
-	return chartRenderResult("render_cartesian_series_chart", "cartesian series chart")
+	return chartRenderResult("show_bar_line_area_chart", "bar/line/area chart")
 }
 
-// registerRenderCartesianSeriesChart adds the cartesian chart tool, linking the
+// registerShowBarLineAreaChart adds the bar/line/area chart tool, linking the
 // shared chart widget.
-func (h *Handlers) registerRenderCartesianSeriesChart(s *mcp.Server) {
+func (h *Handlers) registerShowBarLineAreaChart(s *mcp.Server) {
 	tool := &mcp.Tool{
-		Name:        "render_cartesian_series_chart",
-		Description: "Renders a stored query as a cartesian chart (bar/line/area) with one X axis and one or more Y series. Pass the result_key from run_query plus the axis/series mapping. The chart widget loads the rows itself via the app-only fetch_chart_data.",
+		Name:        "show_bar_line_area_chart",
+		Description: "Use this for bar charts, line charts, area charts or any combination of them. Shows a chart visualization widget for a result_key received from query_database. All chart types support stacking. Needs one X axis column and one or more Y series. Pass the result_key from query_database plus the axis/series mapping. The chart widget loads the rows itself using the result_key. Note: users can view original SQL in the rendered chart widget, also the table of data which they can download as JSON or CSV.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			DestructiveHint: helpers.Pointer(false),
@@ -69,5 +68,5 @@ func (h *Handlers) registerRenderCartesianSeriesChart(s *mcp.Server) {
 	if uri := ui.WidgetURI(chartWidget); uri != "" {
 		tool.Meta = mcp.Meta{"ui": map[string]any{"resourceUri": uri}}
 	}
-	mcp.AddTool(s, tool, h.renderCartesianSeriesChart)
+	mcp.AddTool(s, tool, h.showBarLineAreaChart)
 }

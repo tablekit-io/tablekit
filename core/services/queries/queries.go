@@ -1,6 +1,6 @@
-// Package queries is the repository for run_query descriptors: the {database,
-// sql, description} records that run_query saves and that retrieve_results,
-// fetch_chart_data, render_*_chart and get_export_url later load by key to
+// Package queries is the repository for query_database descriptors: the {database,
+// sql, description} records that query_database saves and that read_results,
+// fetch_chart_data, the chart tools and get_export_url later load by key to
 // re-run against the live database. It stores descriptors only — never result
 // rows — so the table stays small and every read reflects current data.
 package queries

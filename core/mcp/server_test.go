@@ -23,9 +23,9 @@ func connectInMemory(t *testing.T) *mcp.ClientSession {
 	serverT, clientT := mcp.NewInMemoryTransports()
 
 	// Registration only stores the service handles; the protocol tests below list
-	// tools and call list_databases. list_databases needs a (possibly empty)
-	// engine, so wire one loaded from a nonexistent file (yields an empty Service,
-	// no error). Queries/Issuer stay nil — list_databases doesn't touch them.
+	// tools and call list_available_databases. list_available_databases needs a
+	// (possibly empty) engine, so wire one loaded from a nonexistent file (yields an
+	// empty Service, no error). Queries/Issuer stay nil — it doesn't touch them.
 	emptyEngine, err := engine.Load(filepath.Join(t.TempDir(), "none.yaml"), engine.Limits{})
 	require.NoError(t, err)
 	server := newServer(&services.Services{Config: &config.Config{}, Engine: emptyEngine})
@@ -55,7 +55,7 @@ func toolsByName(t *testing.T, clientSession *mcp.ClientSession) map[string]*mcp
 func TestListToolsExposesAnnotationsAndSchema(t *testing.T) {
 	clientSession := connectInMemory(t)
 
-	tool := toolsByName(t, clientSession)["list_databases"]
+	tool := toolsByName(t, clientSession)["list_available_databases"]
 	require.NotNil(t, tool)
 	assert.NotNil(t, tool.OutputSchema, "tool should advertise an output schema")
 
@@ -82,8 +82,8 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 	tools := toolsByName(t, clientSession)
 
 	for _, name := range []string{
-		"run_query", "retrieve_results", "fetch_chart_data",
-		"render_cartesian_series_chart", "render_proportional_chart", "get_export_url",
+		"query_database", "read_results", "fetch_chart_data",
+		"show_bar_line_area_chart", "show_pie_donut_sunburst_chart", "get_export_url",
 	} {
 		require.NotNil(t, tools[name], "tool %q should be registered", name)
 	}
@@ -101,7 +101,7 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 	// _meta.ui.resourceUri only once @tablekit/widgets has been built into the
 	// embed dir.
 	if ui.WidgetURI("chart_renderer") != "" {
-		for _, name := range []string{"render_cartesian_series_chart", "render_proportional_chart"} {
+		for _, name := range []string{"show_bar_line_area_chart", "show_pie_donut_sunburst_chart"} {
 			meta := uiMeta(tools[name])
 			require.NotNil(t, meta, "built %q should carry _meta.ui", name)
 			uri, _ := meta["resourceUri"].(string)
@@ -140,10 +140,11 @@ func TestWidgetResourceIsServed(t *testing.T) {
 func TestCallToolReturnsStructuredContent(t *testing.T) {
 	clientSession := connectInMemory(t)
 
-	// list_databases runs against the empty engine wired in connectInMemory, so
-	// it returns zero databases — enough to exercise the text + structured result.
+	// list_available_databases runs against the empty engine wired in
+	// connectInMemory, so it returns zero databases — enough to exercise the text +
+	// structured result.
 	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "list_databases",
+		Name: "list_available_databases",
 	})
 	require.NoError(t, err)
 	assert.False(t, result.IsError)

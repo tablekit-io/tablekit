@@ -1,5 +1,5 @@
 // Package db owns the Postgres database that backs tablekit's own state (the
-// OAuth/MCP server state and the run_query descriptor log). It connects using a
+// OAuth/MCP server state and the query_database descriptor log). It connects using a
 // DSN, waits for the server to accept connections, and brings the schema to the
 // latest revision with goose on every startup using migrations embedded into the
 // binary — so a fresh database and an upgraded binary both converge on the

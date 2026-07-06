@@ -87,7 +87,7 @@ services:
       example-cafe-db:
         condition: service_healthy
 
-  # Dev-only: TableKit's own state database (OAuth/MCP state + the run_query
+  # Dev-only: TableKit's own state database (OAuth/MCP state + the query_database
   # descriptor log). Separate from example-cafe-db so the app's tables never mix with the
   # sample query data. core migrates this on boot; the DB_* env above points at
   # it. Persisted in the appdata volume across recreation (down -v to reset).

@@ -57,7 +57,7 @@ services:
 
     restart: unless-stopped
 
-  # TableKit's own state database (OAuth/MCP state + the run_query descriptor
+  # TableKit's own state database (OAuth/MCP state + the query_database descriptor
   # log). core migrates it on boot; the DB_* env above points at it. Not
   # published to the host — only core (on the default compose network) reaches it.
   postgres:

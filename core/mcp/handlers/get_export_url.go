@@ -11,7 +11,7 @@ import (
 
 // getExportURLInput is the get_export_url tool's argument schema.
 type getExportURLInput struct {
-	QueryKey string `json:"query_key" jsonschema:"the result_key returned by run_query"`
+	QueryKey string `json:"query_key" jsonschema:"the result_key returned by query_database"`
 	Format   string `json:"format" jsonschema:"the export format: \"csv\" or \"json\""`
 }
 
@@ -33,7 +33,7 @@ func (h *Handlers) getExportURL(ctx context.Context, _ *mcp.CallToolRequest, in 
 		return nil, getExportURLOutput{}, err
 	}
 	if descriptor == nil {
-		return nil, getExportURLOutput{}, fmt.Errorf("unknown query_key %q (run run_query first)", in.QueryKey)
+		return nil, getExportURLOutput{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 	}
 
 	token, err := h.Issuer.IssueExport(in.QueryKey)

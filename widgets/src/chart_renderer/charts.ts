@@ -8,7 +8,7 @@ import {type ChartConfig} from '@/components/ui/chart';
 // Row is one result row keyed by column name, as fetch_chart_data returns it.
 export type Row = Record<string, unknown>;
 
-// CartesianInput is render_cartesian_series_chart's arguments.
+// CartesianInput is show_bar_line_area_chart's arguments.
 export type CartesianInput = {
     readonly query_key: string;
     readonly flip_axes?: boolean;
@@ -23,7 +23,7 @@ export type CartesianInput = {
     }>;
 };
 
-// ProportionalInput is render_proportional_chart's arguments.
+// ProportionalInput is show_pie_donut_sunburst_chart's arguments.
 export type ProportionalInput = {
     readonly query_key: string;
     readonly display?: 'pie' | 'donut';

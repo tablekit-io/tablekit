@@ -123,7 +123,7 @@ type PageOptions struct {
 	// Limit is the maximum number of rows to return in this window.
 	Limit int
 	// MaxBytes caps the encoded size of the returned rows; charts/exports raise
-	// it well above the run_query default.
+	// it well above the query_database default.
 	MaxBytes int
 }
 

@@ -9,16 +9,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// retrieveResultsInput is the retrieve_results tool's argument schema.
-type retrieveResultsInput struct {
-	Key     string   `json:"key" jsonschema:"the result_key returned by run_query"`
+// readResultsInput is the read_results tool's argument schema.
+type readResultsInput struct {
+	Key     string   `json:"key" jsonschema:"the result_key returned by query_database"`
 	Skip    int      `json:"skip,omitempty" jsonschema:"number of leading rows to skip (OFFSET); defaults to 0"`
-	Limit   int      `json:"limit,omitempty" jsonschema:"maximum rows in this window; defaults to 128, capped at 2048"`
+	Limit   int      `json:"limit,omitempty" jsonschema:"maximum rows in this window; defaults to 128, hard max = 2048"`
 	Columns []string `json:"columns,omitempty" jsonschema:"optional subset of column names to return, in the given order"`
 }
 
-// retrieveResultsOutput is one paginated window of a stored query's rows.
-type retrieveResultsOutput struct {
+// readResultsOutput is one paginated window of a stored query's rows.
+type readResultsOutput struct {
 	Skip          int              `json:"skip" jsonschema:"the offset this window started at"`
 	Limit         int              `json:"limit" jsonschema:"the page size used for this window"`
 	Columns       []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
@@ -29,16 +29,16 @@ type retrieveResultsOutput struct {
 	HintForAgents string           `json:"hint_for_agents,omitempty" jsonschema:"guidance for the calling agent on how best to use this result"`
 }
 
-// retrieveResults pages through a stored query's rows. It re-runs the stored SQL
-// at the requested offset/limit (rows are never cached), then optionally narrows
-// to a requested subset of columns.
-func (h *Handlers) retrieveResults(ctx context.Context, _ *mcp.CallToolRequest, in retrieveResultsInput) (*mcp.CallToolResult, retrieveResultsOutput, error) {
+// readResults pages through a stored query's rows. It re-runs the stored SQL at the
+// requested offset/limit (rows are never cached), then optionally narrows to a
+// requested subset of columns.
+func (h *Handlers) readResults(ctx context.Context, _ *mcp.CallToolRequest, in readResultsInput) (*mcp.CallToolResult, readResultsOutput, error) {
 	descriptor, err := h.Queries.Get(ctx, in.Key)
 	if err != nil {
-		return nil, retrieveResultsOutput{}, err
+		return nil, readResultsOutput{}, err
 	}
 	if descriptor == nil {
-		return nil, retrieveResultsOutput{}, fmt.Errorf("unknown result_key %q (run run_query first)", in.Key)
+		return nil, readResultsOutput{}, fmt.Errorf("unknown result_key %q (run query_database first)", in.Key)
 	}
 
 	skip := max(in.Skip, 0)
@@ -52,7 +52,7 @@ func (h *Handlers) retrieveResults(ctx context.Context, _ *mcp.CallToolRequest, 
 
 	result, hasMore, err := h.Engine.RunReadOnlyPage(ctx, descriptor.Database, descriptor.SQL, enginePage(skip, limit, 0))
 	if err != nil {
-		return nil, retrieveResultsOutput{}, err
+		return nil, readResultsOutput{}, err
 	}
 
 	columns, rows := projectColumns(result.Columns, result.Rows, in.Columns)
@@ -63,7 +63,7 @@ func (h *Handlers) retrieveResults(ctx context.Context, _ *mcp.CallToolRequest, 
 		nextSkip = &next
 	}
 
-	out := retrieveResultsOutput{
+	out := readResultsOutput{
 		Skip:          skip,
 		Limit:         limit,
 		Columns:       columns,
@@ -80,16 +80,16 @@ func (h *Handlers) retrieveResults(ctx context.Context, _ *mcp.CallToolRequest, 
 	}, out, nil
 }
 
-// registerRetrieveResults adds the retrieve_results tool. Read-only, re-runs the
-// stored query against an external database, so OpenWorldHint is true.
-func (h *Handlers) registerRetrieveResults(s *mcp.Server) {
+// registerReadResults adds the read_results tool. Read-only, re-runs the stored
+// query against an external database, so OpenWorldHint is true.
+func (h *Handlers) registerReadResults(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "retrieve_results",
-		Description: "Returns a paginated window of a stored query's rows. Pass the result_key from run_query, plus optional skip/limit and an optional column subset. Each call re-runs the stored SQL at the requested offset against live data; use has_more / next_skip to page.",
+		Name:        "read_results",
+		Description: "Returns a paginated view of a query result. Pass the result_key from query_database, plus optional skip/limit and an optional column subset. Each call re-runs the stored SQL at the requested offset against live data; use has_more / next_skip to page.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			DestructiveHint: helpers.Pointer(false),
 			OpenWorldHint:   helpers.Pointer(true),
 		},
-	}, h.retrieveResults)
+	}, h.readResults)
 }

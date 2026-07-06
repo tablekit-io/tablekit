@@ -24,7 +24,7 @@ func (h *Handlers) requireQuery(ctx context.Context, key string) error {
 		return err
 	}
 	if descriptor == nil {
-		return fmt.Errorf("unknown query_key %q (run run_query first)", key)
+		return fmt.Errorf("unknown query_key %q (run query_database first)", key)
 	}
 	return nil
 }
@@ -39,19 +39,19 @@ func chartRenderResult(tool, label string) (*mcp.CallToolResult, chartRenderOutp
 }
 
 // Chart/export sizing: the render and export paths fetch the whole result, so
-// they raise the row and byte caps well above the run_query page size.
+// they raise the row and byte caps well above the query_database page size.
 const (
 	chartMaxRows  = 100_000
 	chartMaxBytes = 16 << 20 // 16 MiB
 )
 
 // chartHint nudges the agent toward the dedicated chart tools whenever it has
-// rows in hand (run_query with include_results, or retrieve_results). Surfaced
+// rows in hand (query_database with include_results, or read_results). Surfaced
 // both as a structured hint_for_agents field and appended to the text content so
 // it is seen regardless of how the client reads the result. The goal is
 // consistent tablekit visualizations users can build muscle memory around,
 // rather than the agent hand-formatting charts itself.
-const chartHint = "If the user wants a visualization, prefer the render_cartesian_series_chart or render_proportional_chart tools (pass this result_key) instead of formatting the data yourself — this keeps tablekit's visualizations consistent so users benefit from muscle memory."
+const chartHint = "If the user wants a visualized chart, prefer the show_bar_line_area_chart tool or show_pie_donut_sunburst_chart tool (pass this result_key) instead of drawing charts yourself — this keeps tablekit's visualizations consistent so users benefit from muscle memory."
 
 // enginePage builds engine.PageOptions; a zero maxBytes lets the engine apply
 // its default.

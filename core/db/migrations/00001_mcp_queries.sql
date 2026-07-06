@@ -1,7 +1,7 @@
 -- +goose Up
--- mcp_queries stores one descriptor per run_query call: the database it targeted,
+-- mcp_queries stores one descriptor per query_database call: the database it targeted,
 -- the user's read-only SQL, and the agent's plain-language description. Result rows
--- are NOT stored; retrieve_results / fetch_chart_data / get_export_url re-run the
+-- are NOT stored; read_results / fetch_chart_data / get_export_url re-run the
 -- SQL against the live database using this descriptor.
 CREATE TABLE mcp_queries (
     id          TEXT PRIMARY KEY,

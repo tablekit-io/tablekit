@@ -107,7 +107,7 @@ Everything is set through the environment.
 ### Databases
 
 Databases are declared in `databases.yaml` as a map keyed by the name the
-assistant uses with `run_query` / `list_databases`. Each entry sets a `type`
+assistant uses with `query_database` / `list_available_databases`. Each entry sets a `type`
 (`postgres`, `mysql`, or `mariadb`) and connects either with structured
 `details` **or** a single `connectionString` — not both:
 
@@ -163,11 +163,11 @@ a per-database SSH tunnel and/or TLS when configured. Read-only is enforced wher
 it counts: every query runs inside a read-only transaction, so TableKit won't run
 writes or DDL on your behalf.
 
-TableKit stores queries, not result rows. `run_query` runs read-only SQL, saves
+TableKit stores queries, not result rows. `query_database` runs read-only SQL, saves
 the query (database, SQL, a description) to its own Postgres database, and returns
 a `result_key`. Everything downstream takes that key and re-runs the stored SQL
-against live data: `retrieve_results` pages through rows, `render_cartesian_series_chart`
-and `render_proportional_chart` draw the in-chat MCP Apps charts (fed by an
+against live data: `read_results` pages through rows, `show_bar_line_area_chart`
+and `show_pie_donut_sunburst_chart` draw the in-chat MCP Apps charts (fed by an
 app-only `fetch_chart_data`), and `get_export_url` mints a short-lived signed URL
 the chart widget opens in your browser to download the full result as CSV or JSON.
 
@@ -206,7 +206,7 @@ go test ./...        # unit + e2e suite (DB container tests skip without Docker)
 go test -race ./...  # the pairing path is concurrency-sensitive
 ```
 
-The database e2e tests (`run_query` against real Postgres/MySQL, including over an
+The database e2e tests (`query_database` against real Postgres/MySQL, including over an
 SSH tunnel and TLS) need Docker and the shared `tablekit` network, which exist
 inside the `core` container — so run them through Compose:
 

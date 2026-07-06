@@ -23,7 +23,7 @@ type Config struct {
 	// advertised as the OAuth issuer and used to build endpoint URLs, so it
 	// must match what clients actually dial. No trailing slash.
 	PublicBaseURL string
-	// DatabasesFile is the YAML file declaring the databases run_query can query.
+	// DatabasesFile is the YAML file declaring the databases query_database can query.
 	// Defaults to ./databases.yaml (relative to the working directory); a missing
 	// file means no databases.
 	DatabasesFile string

@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// runQueryResult mirrors the run_query tool's structured output for decoding.
-// Rows are present because callRunQuery sets include_results.
-type runQueryResult struct {
+// queryDatabaseResult mirrors the query_database tool's structured output for
+// decoding. Rows are present because callQueryDatabase sets include_results.
+type queryDatabaseResult struct {
 	ResultKey string `json:"result_key"`
 	Columns   []struct {
 		Name string `json:"name"`
@@ -28,8 +28,8 @@ type runQueryResult struct {
 	HasMore  bool             `json:"has_more"`
 }
 
-// columnNames extracts the column names from a run_query result.
-func (r runQueryResult) columnNames() []string {
+// columnNames extracts the column names from a query_database result.
+func (r queryDatabaseResult) columnNames() []string {
 	names := make([]string, len(r.Columns))
 	for i, c := range r.Columns {
 		names[i] = c.Name
@@ -37,15 +37,15 @@ func (r runQueryResult) columnNames() []string {
 	return names
 }
 
-// callRunQuery invokes run_query (with the first page of rows inlined) and
-// returns the decoded result, plus whether the call was an error (transport
+// callQueryDatabase invokes query_database (with the first page of rows inlined)
+// and returns the decoded result, plus whether the call was an error (transport
 // error or tool IsError).
-func callRunQuery(t *testing.T, session *mcp.ClientSession, database, query string) (runQueryResult, bool) {
+func callQueryDatabase(t *testing.T, session *mcp.ClientSession, database, query string) (queryDatabaseResult, bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "run_query",
+		Name: "query_database",
 		Arguments: map[string]any{
 			"database":        database,
 			"sql":             query,
@@ -54,12 +54,12 @@ func callRunQuery(t *testing.T, session *mcp.ClientSession, database, query stri
 		},
 	})
 	if err != nil {
-		return runQueryResult{}, true
+		return queryDatabaseResult{}, true
 	}
 	if result.IsError {
-		return runQueryResult{}, true
+		return queryDatabaseResult{}, true
 	}
-	var decoded runQueryResult
+	var decoded queryDatabaseResult
 	raw, err := json.Marshal(result.StructuredContent)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &decoded))
@@ -116,7 +116,7 @@ func writeDatabasesYAML(t *testing.T, c dbCase, dbHost, sshBlock string) string 
 	return path
 }
 
-// runMatrix exercises run_query/list_databases against a started server.
+// runMatrix exercises query_database/list_available_databases against a started server.
 func runMatrix(t *testing.T, c dbCase, configPath string) {
 	t.Helper()
 	server := harness.StartServerEnv(t, "DATABASES_FILE="+configPath)
@@ -125,9 +125,9 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
 
-	// list_databases returns the configured target.
+	// list_available_databases returns the configured target.
 	ctx := context.Background()
-	listResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_databases"})
+	listResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_available_databases"})
 	require.NoError(t, err)
 	require.False(t, listResult.IsError)
 	listed := listResult.StructuredContent.(map[string]any)
@@ -138,13 +138,13 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 	assert.Equal(t, c.engine, first["type"])
 
 	// Seeded SELECT correctness: a real table is queryable.
-	count, isErr := callRunQuery(t, session, "target", "SELECT count(*) AS n FROM "+c.seededTable)
+	count, isErr := callQueryDatabase(t, session, "target", "SELECT count(*) AS n FROM "+c.seededTable)
 	require.False(t, isErr, "count query on %s should succeed", c.seededTable)
 	require.Equal(t, 1, count.RowCount)
 	assert.Contains(t, count.columnNames(), "n")
 
 	// Typed literal round-trip: columns + values arrive intact.
-	lit, isErr := callRunQuery(t, session, "target", "SELECT 7 AS answer, 'tablekit' AS name")
+	lit, isErr := callQueryDatabase(t, session, "target", "SELECT 7 AS answer, 'tablekit' AS name")
 	require.False(t, isErr)
 	require.Len(t, lit.Rows, 1)
 	assert.Equal(t, "tablekit", lit.Rows[0]["name"])
@@ -154,22 +154,22 @@ func runMatrix(t *testing.T, c dbCase, configPath string) {
 	// before row evaluation. DDL is not used here: MySQL DDL implicitly commits,
 	// so it sidesteps the transaction — only DML is reliably blocked.)
 	writeQuery := "INSERT INTO " + c.seededTable + " SELECT * FROM " + c.seededTable
-	_, isErr = callRunQuery(t, session, "target", writeQuery)
+	_, isErr = callQueryDatabase(t, session, "target", writeQuery)
 	assert.True(t, isErr, "DML write must be rejected by the read-only transaction")
 
 	// Paging: a result larger than the first page is capped to default_limit
 	// (128) with has_more set, rather than returned whole.
-	trunc, isErr := callRunQuery(t, session, "target", c.truncateQuery)
+	trunc, isErr := callQueryDatabase(t, session, "target", c.truncateQuery)
 	require.False(t, isErr)
 	assert.True(t, trunc.HasMore)
 	assert.Equal(t, 128, trunc.RowCount)
 
 	// Unknown database name returns a clean error.
-	_, isErr = callRunQuery(t, session, "does-not-exist", "SELECT 1")
+	_, isErr = callQueryDatabase(t, session, "does-not-exist", "SELECT 1")
 	assert.True(t, isErr, "unknown database must error")
 }
 
-// TestDatabasesDirect: run_query against postgres and mysql over a direct connection.
+// TestDatabasesDirect: query_database against postgres and mysql over a direct connection.
 func TestDatabasesDirect(t *testing.T) {
 	harness.RequireDocker(t)
 	for _, c := range dbCases() {
@@ -182,7 +182,7 @@ func TestDatabasesDirect(t *testing.T) {
 	}
 }
 
-// TestDatabasesOverSSH: run_query against postgres and mysql through the SSH bastion.
+// TestDatabasesOverSSH: query_database against postgres and mysql through the SSH bastion.
 func TestDatabasesOverSSH(t *testing.T) {
 	harness.RequireDocker(t)
 	for _, c := range dbCases() {

@@ -57,7 +57,7 @@ SyntaxHighlighter.registerLanguage('sql', sqlLang);
 
 // The two render tools the host can invoke for this widget. The tool-result's
 // structuredContent.tool discriminates which mapping the tool-input carries.
-type TToolName = 'render_cartesian_series_chart' | 'render_proportional_chart';
+type TToolName = 'show_bar_line_area_chart' | 'show_pie_donut_sunburst_chart';
 
 // fetch_chart_data's structured result: the rows the chart plots plus the SQL.
 type TChartData = {
@@ -267,8 +267,8 @@ const App = () => {
                     params.structuredContent as {tool?: string} | undefined
                 )?.tool;
                 if (
-                    name === 'render_cartesian_series_chart' ||
-                    name === 'render_proportional_chart'
+                    name === 'show_bar_line_area_chart' ||
+                    name === 'show_pie_donut_sunburst_chart'
                 ) {
                     setTool(name);
                 }
@@ -312,8 +312,8 @@ const App = () => {
     // Infer the chart family: the discriminator if the host sent it, otherwise
     // the shape of the arguments (x/y => cartesian, value_prop => proportional).
     const chartKind = useMemo<'cartesian' | 'proportional' | null>(() => {
-        if (tool === 'render_cartesian_series_chart') return 'cartesian';
-        if (tool === 'render_proportional_chart') return 'proportional';
+        if (tool === 'show_bar_line_area_chart') return 'cartesian';
+        if (tool === 'show_pie_donut_sunburst_chart') return 'proportional';
         if (!toolArgs) return null;
         if ('value_prop' in toolArgs) return 'proportional';
         if ('x' in toolArgs) return 'cartesian';

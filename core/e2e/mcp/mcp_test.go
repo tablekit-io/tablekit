@@ -33,15 +33,15 @@ func TestMCPListAndCallTool(t *testing.T) {
 	for _, listed := range list.Tools {
 		byName[listed.Name] = listed
 	}
-	tool := byName["list_databases"]
+	tool := byName["list_available_databases"]
 	require.NotNil(t, tool)
-	assert.Equal(t, "list_databases", tool.Name)
+	assert.Equal(t, "list_available_databases", tool.Name)
 	assert.NotNil(t, tool.OutputSchema)
 	require.NotNil(t, tool.Annotations)
 	assert.True(t, tool.Annotations.ReadOnlyHint)
 
 	result, err := clientSession.CallTool(ctx, &mcpsdk.CallToolParams{
-		Name: "list_databases",
+		Name: "list_available_databases",
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)

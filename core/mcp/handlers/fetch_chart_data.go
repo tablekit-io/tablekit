@@ -11,7 +11,7 @@ import (
 
 // fetchChartDataInput is the fetch_chart_data loader's argument schema.
 type fetchChartDataInput struct {
-	QueryKey string `json:"query_key" jsonschema:"the result_key returned by run_query"`
+	QueryKey string `json:"query_key" jsonschema:"the result_key returned by query_database"`
 }
 
 // fetchChartDataOutput is the full result a chart widget renders: every row (up
@@ -33,7 +33,7 @@ func (h *Handlers) fetchChartData(ctx context.Context, _ *mcp.CallToolRequest, i
 		return nil, fetchChartDataOutput{}, err
 	}
 	if descriptor == nil {
-		return nil, fetchChartDataOutput{}, fmt.Errorf("unknown query_key %q (run run_query first)", in.QueryKey)
+		return nil, fetchChartDataOutput{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 	}
 
 	result, _, err := h.Engine.RunReadOnlyPage(ctx, descriptor.Database, descriptor.SQL, enginePage(0, chartMaxRows, chartMaxBytes))
