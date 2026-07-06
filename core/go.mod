@@ -3,6 +3,7 @@ module core
 go 1.25.7
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-jet/jet/v2 v2.15.0
 	github.com/go-sql-driver/mysql v1.10.0

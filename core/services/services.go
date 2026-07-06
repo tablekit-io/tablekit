@@ -41,13 +41,14 @@ func New() (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Resolve .yaml/.yml by base name (dies if both exist), then remember the
-	// resolved path so the app reports what it actually loaded.
+	// Resolve .yaml/.yml by base name (dies if both exist) for the initial load.
+	// Config.DatabasesFile stays the originally configured path so the file
+	// watcher can re-resolve it (e.g. a .yaml appearing after a .yml, or a file
+	// created after startup) — see WatchDatabasesFile.
 	resolvedDatabasesFile, err := config.ResolveDatabasesFile(configService.DatabasesFile)
 	if err != nil {
 		return nil, err
 	}
-	configService.DatabasesFile = resolvedDatabasesFile
 	engineService, err := engine.Load(resolvedDatabasesFile, engine.Limits{
 		StatementTimeout: 10 * time.Second,
 		MaxRows:          2048,

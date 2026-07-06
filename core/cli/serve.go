@@ -27,6 +27,7 @@ var serveCmd = &cobra.Command{
 		g, ctx := errgroup.WithContext(cmd.Context())
 		g.Go(func() error { return listen(appServer) })
 		g.Go(func() error { return listen(controlServer) })
+		g.Go(func() error { return appServices.WatchDatabasesFile(ctx) })
 		g.Go(func() error {
 			<-ctx.Done()
 			_ = appServer.Close()
