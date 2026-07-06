@@ -5,66 +5,80 @@ services:
       dockerfile: Dockerfile-dev
     environment:
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+
       # Persist Go module + build caches in the gocache named volume (mounted
       # below) so deps are downloaded and compiled once, not on every start.
       GOMODCACHE: /gocache/mod
       GOCACHE: /gocache/build
+
       # The stable network throw-away e2e DB containers attach to, so code in
       # this container can reach them by name (e.g. testdb:5432).
       TABLEKIT_E2E_DOCKER_NETWORK: tablekit
+
       # Point run_sql at the committed dev DB config (core/ is bind-mounted to
       # /app below). Overrides the default ./databases.yaml, which is
       # gitignored. databases.dev.yaml targets the example-cafe-db service (cafe DB).
       DATABASES_FILE: /app/databases.dev.yaml
+
       # TableKit's own state lives in the dedicated `postgres` service (separate
       # from example-cafe-db). Structured DB_* vars take precedence over DATABASE_URL.
       DB_HOST: postgres
-      DB_PORT: "5432"
+      DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: pw
+      DB_PASSWORD: postgres
       DB_NAME: tablekit
+
       # SIGNING_KEY is required (no generated fallback). A fixed dev-only base64
       # HS256 key so the stack boots with zero host config; never use in prod.
       SIGNING_KEY: dGFibGVraXQtZGV2LXNpZ25pbmcta2V5LTMyYnl0ZXM=
+
     # host.docker.internal resolves to the host on Docker Desktop natively; the
     # host-gateway mapping gives Linux the same name for the published-port
     # fallback path (see README).
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     networks:
       - tablekit
+
     ports:
       # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
       - target: 8080
         published: 8080
         protocol: tcp
         mode: host
+
       # control port: /, /health, reserved for ops
       - target: 8081
         published: 8081
         protocol: tcp
         mode: host
+
     volumes:
       - type: bind
         source: ./core
         target: /app
+
       # Go module + build caches in a named volume so they survive container
       # recreation (deps download/compile once, then reused).
       - type: volume
         source: gocache
         target: /gocache
+
       # Host docker socket — the e2e suite drives the host daemon through this to
       # spin up/tear down throw-away DB containers (Docker-outside-of-Docker).
       # Read-write: tests create and destroy containers. See README for per-OS setup.
       - type: bind
         source: /var/run/docker.sock
         target: /var/run/docker.sock
+
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 60s
+
     # Wait for the app-state postgres (so migrations have somewhere to run) and
     # for example-cafe-db to finish seeding (so the first run_sql has data to hit).
     depends_on:
@@ -81,17 +95,23 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: pw
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: tablekit
+
     networks:
       - tablekit
+
     ports:
       # Published on 5433 (example-cafe-db already owns host 5432) for a host psql/GUI.
-      - "5433:5432"
+      - published: 5433
+        target: 5432
+        protocol: tcp
+
     volumes:
       - type: volume
         source: pgdata
         target: /var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
       interval: 5s
@@ -112,13 +132,18 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: pw
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: cafe
+
     networks:
       - tablekit
+
     ports:
       # Published so a host psql/GUI can connect to localhost:5432 too.
-      - "5432:5432"
+      - published: 5432
+        target: 5432
+        protocol: tcp
+
     volumes:
       # Reuse the e2e cafe seed as an init script (no CREATE DATABASE inside,
       # so it lands in POSTGRES_DB=cafe).
@@ -126,10 +151,12 @@ services:
         source: ./core/e2e/database/test-data/cafe_data.sql
         target: /docker-entrypoint-initdb.d/cafe_data.sql
         read_only: true
+
       # Persist the seeded data across container recreation.
       - type: volume
         source: example-cafe-db-data
         target: /var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d cafe"]
       interval: 5s
@@ -144,11 +171,14 @@ services:
   widgets:
     image: oven/bun:1
     working_dir: /widgets
+
     # `bun run dev` is `vite build --watch`. bun install runs first so a fresh
     # checkout works; it's a near-no-op once node_modules is populated.
     command: sh -c "bun install && bun run dev"
+
     networks:
       - tablekit
+
     volumes:
       # node_modules lives on the host (not a named volume) so the IDE resolves
       # types. The container writes Linux-native binaries here, which the IDE
@@ -156,6 +186,7 @@ services:
       - type: bind
         source: ./widgets
         target: /widgets
+
       # vite's dist/ maps to the core embed dir (core/mcp/ui/widgets), so built
       # widgets flow into core.
       - type: bind

@@ -12,9 +12,9 @@ services:
       # structured DB_* vars take precedence over DATABASE_URL; change the
       # password to match the database service.
       DB_HOST: postgres
-      DB_PORT: "5432"
+      DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: "${DB_PASSWORD:-pw}"
+      DB_PASSWORD: "${DB_PASSWORD:-postgres}"
       DB_NAME: tablekit
 
       # Where the databases config is read from. Resolved by base name, so either
@@ -64,7 +64,7 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "${DB_PASSWORD:-pw}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-postgres}"
       POSTGRES_DB: tablekit
     volumes:
       - type: volume
