@@ -13,7 +13,7 @@ import (
 )
 
 type McpQueries struct {
-	ID          string `sql:"primary_key"`
+	ID          uuid.UUID `sql:"primary_key"`
 	SQL         string
 	Description string
 	CreatedAt   time.Time

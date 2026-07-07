@@ -9,6 +9,7 @@ import (
 	"core/helpers"
 	"core/mcp/handlers/shared"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -56,7 +57,11 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			return nil, output{}, fmt.Errorf("format must be \"csv\" or \"json\", got %q", in.Format)
 		}
 
-		descriptor, err := deps.Queries.Get(ctx, in.QueryKey)
+		queryID, err := uuid.Parse(in.QueryKey)
+		if err != nil {
+			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
+		}
+		descriptor, err := deps.Queries.Get(ctx, queryID)
 		if err != nil {
 			return nil, output{}, err
 		}

@@ -10,6 +10,7 @@ import (
 	"core/services/oauth"
 	"core/services/store"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -85,15 +86,19 @@ var pairingTokenRevokeCmd = &cobra.Command{
 
 		// Accept either the bearer token id or the token itself, so a user who
 		// kept the token but lost the id can still revoke it.
-		tokenID := args[0]
-		if rawJWT, ok := strings.CutPrefix(tokenID, oauth.TokenPrefix); ok {
+		rawID := args[0]
+		if rawJWT, ok := strings.CutPrefix(rawID, oauth.TokenPrefix); ok {
 			id, err := oauth.BearerTokenID(rawJWT)
 			if err != nil {
 				return fmt.Errorf("could not read token id from token: %w", err)
 			}
-			tokenID = id
+			rawID = id
 		}
 
+		tokenID, err := uuid.Parse(rawID)
+		if err != nil {
+			return fmt.Errorf("invalid bearer token id %q", rawID)
+		}
 		if err := appServices.BearerTokens.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
 			return err
 		}

@@ -8,12 +8,13 @@
 package model
 
 import (
+	"github.com/google/uuid"
 	"time"
 )
 
 type OAuthTokenChains struct {
-	ID                string `sql:"primary_key"`
-	ClientID          string
+	ID                uuid.UUID `sql:"primary_key"`
+	ClientID          uuid.UUID
 	UserID            string
 	Scope             string
 	RedirectURI       string

@@ -12,14 +12,15 @@ import (
 	"core/db/gen/tablekit/public/table"
 
 	"github.com/go-jet/jet/v2/qrm"
+	"github.com/google/uuid"
 
 	. "github.com/go-jet/jet/v2/postgres"
 )
 
 // AuthCode is a one-time authorization code bound to a PKCE challenge.
 type AuthCode struct {
-	Code          string    `json:"code"`
-	ClientID      string    `json:"client_id"`
+	Code          uuid.UUID `json:"code"`
+	ClientID      uuid.UUID `json:"client_id"`
 	RedirectURI   string    `json:"redirect_uri"`
 	CodeChallenge string    `json:"code_challenge"`
 	Scope         string    `json:"scope"`
@@ -31,8 +32,8 @@ type AuthCode struct {
 // iat of the just-used refresh token, so any older (already-rotated) refresh
 // token is rejected as a replay — and a replay revokes the whole chain.
 type Chain struct {
-	ID                string    `json:"id"`
-	ClientID          string    `json:"client_id"`
+	ID                uuid.UUID `json:"id"`
+	ClientID          uuid.UUID `json:"client_id"`
 	UserID            string    `json:"user_id"`
 	Scope             string    `json:"scope"`
 	RedirectURI       string    `json:"redirect_uri"`
@@ -46,8 +47,8 @@ type Chain struct {
 // here so it can be revoked: the MCP guard looks it up by its jti on every
 // request and rejects it once Revoked is set.
 type BearerToken struct {
-	ID        string    `json:"id"` // jti; links the JWT to this row
-	ClientID  string    `json:"client_id"`
+	ID        uuid.UUID `json:"id"` // jti; links the JWT to this row
+	ClientID  uuid.UUID `json:"client_id"`
 	Revoked   bool      `json:"revoked"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -58,7 +59,7 @@ type BearerToken struct {
 // AuthCodeRepository persists one-time PKCE authorization codes.
 type AuthCodeRepository interface {
 	PutCode(ctx context.Context, c *AuthCode) error
-	ConsumeCode(ctx context.Context, code string) (*AuthCode, error)
+	ConsumeCode(ctx context.Context, code uuid.UUID) (*AuthCode, error)
 }
 
 type authCodeRepository struct {
@@ -92,7 +93,7 @@ func (r *authCodeRepository) PutCode(ctx context.Context, c *AuthCode) error {
 // ConsumeCode atomically fetches and deletes a code (single use). Returns nil if
 // the code is unknown/already used. The SELECT + DELETE run in a transaction so
 // two redemptions of the same code cannot both succeed.
-func (r *authCodeRepository) ConsumeCode(ctx context.Context, code string) (*AuthCode, error) {
+func (r *authCodeRepository) ConsumeCode(ctx context.Context, code uuid.UUID) (*AuthCode, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ func (r *authCodeRepository) ConsumeCode(ctx context.Context, code string) (*Aut
 	var row model.OAuthAuthCodes
 	err = SELECT(table.OAuthAuthCodes.AllColumns).
 		FROM(table.OAuthAuthCodes).
-		WHERE(table.OAuthAuthCodes.Code.EQ(String(code))).
+		WHERE(table.OAuthAuthCodes.Code.EQ(UUID(code))).
 		QueryContext(ctx, tx, &row)
 	if errors.Is(err, qrm.ErrNoRows) {
 		return nil, nil
@@ -113,7 +114,7 @@ func (r *authCodeRepository) ConsumeCode(ctx context.Context, code string) (*Aut
 
 	if _, err := table.OAuthAuthCodes.
 		DELETE().
-		WHERE(table.OAuthAuthCodes.Code.EQ(String(code))).
+		WHERE(table.OAuthAuthCodes.Code.EQ(UUID(code))).
 		ExecContext(ctx, tx); err != nil {
 		return nil, fmt.Errorf("consume auth code: %w", err)
 	}
@@ -136,9 +137,9 @@ func (r *authCodeRepository) ConsumeCode(ctx context.Context, code string) (*Aut
 // TokenChainRepository persists refresh-token lineages.
 type TokenChainRepository interface {
 	NewChain(ctx context.Context, c *Chain) error
-	GetChain(ctx context.Context, id string) (*Chain, error)
-	BumpCutoff(ctx context.Context, id string, t time.Time) error
-	RevokeChain(ctx context.Context, id string) error
+	GetChain(ctx context.Context, id uuid.UUID) (*Chain, error)
+	BumpCutoff(ctx context.Context, id uuid.UUID, t time.Time) error
+	RevokeChain(ctx context.Context, id uuid.UUID) error
 }
 
 type tokenChainRepository struct {
@@ -171,10 +172,10 @@ func (r *tokenChainRepository) NewChain(ctx context.Context, c *Chain) error {
 }
 
 // GetChain returns the chain by id, or nil if unknown.
-func (r *tokenChainRepository) GetChain(ctx context.Context, id string) (*Chain, error) {
+func (r *tokenChainRepository) GetChain(ctx context.Context, id uuid.UUID) (*Chain, error) {
 	stmt := SELECT(table.OAuthTokenChains.AllColumns).
 		FROM(table.OAuthTokenChains).
-		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+		WHERE(table.OAuthTokenChains.ID.EQ(UUID(id)))
 
 	var row model.OAuthTokenChains
 	err := stmt.QueryContext(ctx, r.database, &row)
@@ -197,11 +198,11 @@ func (r *tokenChainRepository) GetChain(ctx context.Context, id string) (*Chain,
 }
 
 // BumpCutoff advances a chain's InvalidatedBefore to t (rotation).
-func (r *tokenChainRepository) BumpCutoff(ctx context.Context, id string, t time.Time) error {
+func (r *tokenChainRepository) BumpCutoff(ctx context.Context, id uuid.UUID, t time.Time) error {
 	stmt := table.OAuthTokenChains.
 		UPDATE(table.OAuthTokenChains.InvalidatedBefore).
 		SET(TimestampzT(t)).
-		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+		WHERE(table.OAuthTokenChains.ID.EQ(UUID(id)))
 	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("bump chain cutoff %q: %w", id, err)
 	}
@@ -209,11 +210,11 @@ func (r *tokenChainRepository) BumpCutoff(ctx context.Context, id string, t time
 }
 
 // RevokeChain marks a chain revoked (replay detected / logout).
-func (r *tokenChainRepository) RevokeChain(ctx context.Context, id string) error {
+func (r *tokenChainRepository) RevokeChain(ctx context.Context, id uuid.UUID) error {
 	stmt := table.OAuthTokenChains.
 		UPDATE(table.OAuthTokenChains.Revoked).
 		SET(Bool(true)).
-		WHERE(table.OAuthTokenChains.ID.EQ(String(id)))
+		WHERE(table.OAuthTokenChains.ID.EQ(UUID(id)))
 	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return fmt.Errorf("revoke chain %q: %w", id, err)
 	}
@@ -225,8 +226,8 @@ func (r *tokenChainRepository) RevokeChain(ctx context.Context, id string) error
 // BearerTokenRepository persists CLI-minted long-lived bearer tokens.
 type BearerTokenRepository interface {
 	PutBearerToken(ctx context.Context, t *BearerToken) error
-	GetBearerToken(ctx context.Context, id string) (*BearerToken, error)
-	RevokeBearerToken(ctx context.Context, id string) error
+	GetBearerToken(ctx context.Context, id uuid.UUID) (*BearerToken, error)
+	RevokeBearerToken(ctx context.Context, id uuid.UUID) error
 }
 
 type bearerTokenRepository struct {
@@ -256,10 +257,10 @@ func (r *bearerTokenRepository) PutBearerToken(ctx context.Context, t *BearerTok
 }
 
 // GetBearerToken returns the bearer token by id, or nil if unknown.
-func (r *bearerTokenRepository) GetBearerToken(ctx context.Context, id string) (*BearerToken, error) {
+func (r *bearerTokenRepository) GetBearerToken(ctx context.Context, id uuid.UUID) (*BearerToken, error) {
 	stmt := SELECT(table.OAuthBearerTokens.AllColumns).
 		FROM(table.OAuthBearerTokens).
-		WHERE(table.OAuthBearerTokens.ID.EQ(String(id)))
+		WHERE(table.OAuthBearerTokens.ID.EQ(UUID(id)))
 
 	var row model.OAuthBearerTokens
 	err := stmt.QueryContext(ctx, r.database, &row)
@@ -280,11 +281,11 @@ func (r *bearerTokenRepository) GetBearerToken(ctx context.Context, id string) (
 
 // RevokeBearerToken marks a bearer token revoked. It returns an error if the id
 // is unknown, so the CLI can tell the user nothing was revoked.
-func (r *bearerTokenRepository) RevokeBearerToken(ctx context.Context, id string) error {
+func (r *bearerTokenRepository) RevokeBearerToken(ctx context.Context, id uuid.UUID) error {
 	result, err := table.OAuthBearerTokens.
 		UPDATE(table.OAuthBearerTokens.Revoked).
 		SET(Bool(true)).
-		WHERE(table.OAuthBearerTokens.ID.EQ(String(id))).
+		WHERE(table.OAuthBearerTokens.ID.EQ(UUID(id))).
 		ExecContext(ctx, r.database)
 	if err != nil {
 		return fmt.Errorf("revoke bearer token %q: %w", id, err)

@@ -12,6 +12,8 @@ import (
 	"core/services/databases"
 	"core/services/oauth"
 	"core/services/queries"
+
+	"github.com/google/uuid"
 )
 
 // Deps carries the dependencies the tools need: the query engine, the
@@ -27,9 +29,14 @@ type Deps struct {
 }
 
 // RequireQuery confirms a stored query exists for key, turning an unknown key
-// into a user-facing error.
+// into a user-facing error. A malformed key (not a UUID) can't identify any
+// stored query, so it is reported the same as an unknown one.
 func (d Deps) RequireQuery(ctx context.Context, key string) error {
-	descriptor, err := d.Queries.Get(ctx, key)
+	id, err := uuid.Parse(key)
+	if err != nil {
+		return fmt.Errorf("unknown query_key %q (run query_database first)", key)
+	}
+	descriptor, err := d.Queries.Get(ctx, id)
 	if err != nil {
 		return err
 	}

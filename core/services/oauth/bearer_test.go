@@ -37,5 +37,5 @@ func TestMintBearer(t *testing.T) {
 	rawJWT := strings.TrimPrefix(minted.Token, TokenPrefix)
 	claims, err := issuer.VerifyBearer(rawJWT)
 	require.NoError(t, err)
-	assert.Equal(t, minted.ID, claims.ID)
+	assert.Equal(t, minted.ID.String(), claims.ID)
 }

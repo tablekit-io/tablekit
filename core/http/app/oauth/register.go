@@ -36,8 +36,13 @@ func (h *Handlers) HandleRegister(c *gin.Context) {
 	if request.ClientName != "" {
 		clientName = &request.ClientName
 	}
+	clientID, err := uuid.NewV7()
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "server_error", "could not generate client_id")
+		return
+	}
 	client := &store.Client{
-		ClientID:     uuid.NewString(),
+		ClientID:     clientID,
 		ClientName:   clientName,
 		RedirectURIs: request.RedirectURIs,
 		CreatedAt:    time.Now(),

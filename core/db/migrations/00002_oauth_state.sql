@@ -8,7 +8,7 @@
 -- null client_name, empty redirect_uris). redirect_uris is a JSON array stored
 -- whole: it is only ever read or written as a unit.
 CREATE TABLE oauth_clients (
-    client_id     TEXT PRIMARY KEY,
+    client_id     UUID PRIMARY KEY,
     client_name   TEXT,
     type          TEXT NOT NULL DEFAULT '',
     redirect_uris TEXT NOT NULL DEFAULT '[]',
@@ -17,8 +17,8 @@ CREATE TABLE oauth_clients (
 
 -- One-time, PKCE-bound authorization codes. Deleted on redemption (single use).
 CREATE TABLE oauth_auth_codes (
-    code           TEXT PRIMARY KEY,
-    client_id      TEXT NOT NULL,
+    code           UUID PRIMARY KEY,
+    client_id      UUID NOT NULL,
     redirect_uri   TEXT NOT NULL,
     code_challenge TEXT NOT NULL,
     scope          TEXT NOT NULL,
@@ -29,8 +29,8 @@ CREATE TABLE oauth_auth_codes (
 -- Refresh-token lineages. invalidated_before is the rotation cutoff: any refresh
 -- token issued at or before it is a replay, which revokes the whole chain.
 CREATE TABLE oauth_token_chains (
-    id                 TEXT PRIMARY KEY,
-    client_id          TEXT NOT NULL,
+    id                 UUID PRIMARY KEY,
+    client_id          UUID NOT NULL,
     user_id            TEXT NOT NULL,
     scope              TEXT NOT NULL,
     redirect_uri       TEXT NOT NULL,
@@ -42,8 +42,8 @@ CREATE TABLE oauth_token_chains (
 -- Long-lived CLI-minted bearer tokens, looked up by jti on every MCP request so
 -- they can be revoked.
 CREATE TABLE oauth_bearer_tokens (
-    id         TEXT PRIMARY KEY,
-    client_id  TEXT NOT NULL,
+    id         UUID PRIMARY KEY,
+    client_id  UUID NOT NULL,
     revoked    BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL
@@ -51,14 +51,14 @@ CREATE TABLE oauth_bearer_tokens (
 
 -- Clients allowed to authenticate. Membership is the paired set.
 CREATE TABLE oauth_paired_clients (
-    client_id TEXT PRIMARY KEY
+    client_id UUID PRIMARY KEY
 );
 
 -- Generic key/value config with JSON-encoded values. Currently holds only
 -- 'pairing_mode'; an absent row means the Go default ("once"), matching the old
 -- loadClients behavior.
 CREATE TABLE config (
-    key   TEXT PRIMARY KEY,
+    key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
 

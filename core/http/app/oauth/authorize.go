@@ -31,7 +31,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 
 	query := c.Request.URL.Query()
 	responseType := query.Get("response_type")
-	clientID := query.Get("client_id")
+	rawClientID := query.Get("client_id")
 	redirectURI := query.Get("redirect_uri")
 	state := query.Get("state")
 	codeChallenge := query.Get("code_challenge")
@@ -42,8 +42,13 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		authorizeError(c, "response_type must be \"code\"")
 		return
 	}
-	if clientID == "" {
+	if rawClientID == "" {
 		authorizeError(c, "client_id is required")
+		return
+	}
+	clientID, err := uuid.Parse(rawClientID)
+	if err != nil {
+		authorizeError(c, "unknown client_id")
 		return
 	}
 	if redirectURI == "" {
@@ -87,7 +92,11 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	if scope == "" {
 		scope = oauth.Scope
 	}
-	code := uuid.NewString()
+	code, err := uuid.NewV7()
+	if err != nil {
+		authorizeError(c, "internal error issuing code")
+		return
+	}
 	if err := h.appServices.AuthCodes.PutCode(c.Request.Context(), &store.AuthCode{
 		Code:          code,
 		ClientID:      clientID,
@@ -107,7 +116,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		return
 	}
 	redirectQuery := target.Query()
-	redirectQuery.Set("code", code)
+	redirectQuery.Set("code", code.String())
 	if state != "" {
 		redirectQuery.Set("state", state)
 	}

@@ -8,12 +8,13 @@
 package model
 
 import (
+	"github.com/google/uuid"
 	"time"
 )
 
 type OAuthAuthCodes struct {
-	Code          string `sql:"primary_key"`
-	ClientID      string
+	Code          uuid.UUID `sql:"primary_key"`
+	ClientID      uuid.UUID
 	RedirectURI   string
 	CodeChallenge string
 	Scope         string

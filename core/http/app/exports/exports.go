@@ -15,6 +15,7 @@ import (
 	"core/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // Handlers serves the export endpoint, wired to the issuer (token verification),
@@ -48,7 +49,12 @@ func (h *Handlers) handleExport(c *gin.Context) {
 		return
 	}
 
-	descriptor, err := h.services.Queries.Get(c.Request.Context(), claims.QK)
+	queryID, err := uuid.Parse(claims.QK)
+	if err != nil {
+		c.String(http.StatusNotFound, "the query for this export no longer exists")
+		return
+	}
+	descriptor, err := h.services.Queries.Get(c.Request.Context(), queryID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the query")
 		return
@@ -79,7 +85,7 @@ func (h *Handlers) handleExport(c *gin.Context) {
 
 	switch format {
 	case "csv":
-		writeCSV(c, descriptor.ID, result)
+		writeCSV(c, descriptor.ID.String(), result)
 	case "json":
 		writeJSON(c, result)
 	}

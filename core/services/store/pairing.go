@@ -12,6 +12,7 @@ import (
 	"core/db/gen/tablekit/public/table"
 
 	"github.com/go-jet/jet/v2/qrm"
+	"github.com/google/uuid"
 
 	. "github.com/go-jet/jet/v2/postgres"
 )
@@ -30,9 +31,9 @@ const pairingModeKey = "pairing_mode"
 // key/value config that holds the pairing mode. It bundles the two because
 // TryPair reads the mode and writes both tables in one transaction.
 type PairingRepository interface {
-	TryPair(ctx context.Context, clientID string) (bool, error)
+	TryPair(ctx context.Context, clientID uuid.UUID) (bool, error)
 	SetPairingMode(ctx context.Context, mode string) error
-	PairingStatus(ctx context.Context) (mode string, paired []string, err error)
+	PairingStatus(ctx context.Context) (mode string, paired []uuid.UUID, err error)
 }
 
 type pairingRepository struct {
@@ -54,7 +55,7 @@ func NewPairingRepository(database *sql.DB) PairingRepository {
 //   - disabled:   new clients rejected
 //   - once:       new client paired, then mode flips to disabled
 //   - indefinite: every new client paired; mode unchanged
-func (r *pairingRepository) TryPair(ctx context.Context, clientID string) (bool, error) {
+func (r *pairingRepository) TryPair(ctx context.Context, clientID uuid.UUID) (bool, error) {
 	// Serialize the read-check-write in-process so concurrent pairings under
 	// "once" cannot both win a snapshot race (single-instance server).
 	r.mu.Lock()
@@ -69,7 +70,7 @@ func (r *pairingRepository) TryPair(ctx context.Context, clientID string) (bool,
 	var existing model.OAuthPairedClients
 	err = SELECT(table.OAuthPairedClients.ClientID).
 		FROM(table.OAuthPairedClients).
-		WHERE(table.OAuthPairedClients.ClientID.EQ(String(clientID))).
+		WHERE(table.OAuthPairedClients.ClientID.EQ(UUID(clientID))).
 		QueryContext(ctx, tx, &existing)
 	if err == nil {
 		return true, nil // already paired
@@ -114,7 +115,7 @@ func (r *pairingRepository) SetPairingMode(ctx context.Context, mode string) err
 }
 
 // PairingStatus returns the current mode and the paired client ids.
-func (r *pairingRepository) PairingStatus(ctx context.Context) (mode string, paired []string, err error) {
+func (r *pairingRepository) PairingStatus(ctx context.Context) (mode string, paired []uuid.UUID, err error) {
 	mode, err = pairingMode(ctx, r.database)
 	if err != nil {
 		return "", nil, err
@@ -127,7 +128,7 @@ func (r *pairingRepository) PairingStatus(ctx context.Context) (mode string, pai
 	if err != nil {
 		return "", nil, fmt.Errorf("list paired clients: %w", err)
 	}
-	paired = make([]string, 0, len(rows))
+	paired = make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
 		paired = append(paired, row.ClientID)
 	}
@@ -195,10 +196,10 @@ func setPairingMode(ctx context.Context, q qrm.Executable, mode string) error {
 }
 
 // pairClient adds clientID to the paired set (idempotent).
-func pairClient(ctx context.Context, q qrm.Executable, clientID string) error {
+func pairClient(ctx context.Context, q qrm.Executable, clientID uuid.UUID) error {
 	stmt := table.OAuthPairedClients.
 		INSERT(table.OAuthPairedClients.ClientID).
-		VALUES(clientID).
+		VALUES(UUID(clientID)).
 		ON_CONFLICT(table.OAuthPairedClients.ClientID).
 		DO_NOTHING()
 	if _, err := stmt.ExecContext(ctx, q); err != nil {

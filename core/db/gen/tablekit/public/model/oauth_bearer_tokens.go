@@ -8,12 +8,13 @@
 package model
 
 import (
+	"github.com/google/uuid"
 	"time"
 )
 
 type OAuthBearerTokens struct {
-	ID        string `sql:"primary_key"`
-	ClientID  string
+	ID        uuid.UUID `sql:"primary_key"`
+	ClientID  uuid.UUID
 	Revoked   bool
 	CreatedAt time.Time
 	ExpiresAt time.Time

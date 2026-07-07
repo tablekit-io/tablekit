@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,14 +14,15 @@ func TestClients(t *testing.T) {
 	clients := NewClientRepository(newDB(t))
 	ctx := context.Background()
 
-	got, err := clients.GetClient(ctx, "nope")
+	got, err := clients.GetClient(ctx, uuid.New())
 	require.NoError(t, err)
 	assert.Nil(t, got)
 
-	c := &Client{ClientID: "abc", RedirectURIs: []string{"http://x/cb"}, CreatedAt: time.Now()}
+	clientID := uuid.New()
+	c := &Client{ClientID: clientID, RedirectURIs: []string{"http://x/cb"}, CreatedAt: time.Now()}
 	require.NoError(t, clients.SaveClient(ctx, c))
 
-	got, err = clients.GetClient(ctx, "abc")
+	got, err = clients.GetClient(ctx, clientID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, []string{"http://x/cb"}, got.RedirectURIs)
@@ -34,13 +36,14 @@ func TestBearerClient(t *testing.T) {
 	clients := NewClientRepository(database)
 	ctx := context.Background()
 
+	bearerID := uuid.New()
 	require.NoError(t, clients.SaveClient(ctx, &Client{
-		ClientID: "bearer-1", ClientName: nil, RedirectURIs: []string{},
+		ClientID: bearerID, ClientName: nil, RedirectURIs: []string{},
 		Type: "bearer", CreatedAt: time.Now(),
 	}))
 
 	reopened := NewClientRepository(database)
-	got, err := reopened.GetClient(ctx, "bearer-1")
+	got, err := reopened.GetClient(ctx, bearerID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Nil(t, got.ClientName)

@@ -80,7 +80,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		}
 
 		out := output{
-			ResultKey:    key,
+			ResultKey:    key.String(),
 			RowCount:     result.RowCount,
 			HasMore:      hasMore,
 			DefaultLimit: shared.DefaultLimit,

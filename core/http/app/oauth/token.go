@@ -16,10 +16,15 @@ import (
 // PKCE), so the client is identified by the client_id form field.
 func (h *Handlers) HandleToken(c *gin.Context) {
 	grantType := c.PostForm("grant_type")
-	clientID := c.PostForm("client_id")
+	rawClientID := c.PostForm("client_id")
 
-	if clientID == "" {
+	if rawClientID == "" {
 		sendError(c, http.StatusUnauthorized, "invalid_client", "client_id is required")
+		return
+	}
+	clientID, err := uuid.Parse(rawClientID)
+	if err != nil {
+		sendError(c, http.StatusUnauthorized, "invalid_client", "unknown client_id")
 		return
 	}
 	client, err := h.appServices.Clients.GetClient(c.Request.Context(), clientID)
@@ -42,16 +47,21 @@ func (h *Handlers) HandleToken(c *gin.Context) {
 // authCodeGrant redeems a one-time code (with PKCE) and opens a fresh refresh
 // chain, returning an access+refresh pair.
 func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
-	code := c.PostForm("code")
+	rawCode := c.PostForm("code")
 	codeVerifier := c.PostForm("code_verifier")
 	redirectURI := c.PostForm("redirect_uri")
 
-	if code == "" || codeVerifier == "" || redirectURI == "" {
+	if rawCode == "" || codeVerifier == "" || redirectURI == "" {
 		sendError(c, http.StatusBadRequest, "invalid_request",
 			"code, code_verifier and redirect_uri are required")
 		return
 	}
 
+	code, err := uuid.Parse(rawCode)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown or used code")
+		return
+	}
 	authCode, err := h.appServices.AuthCodes.ConsumeCode(c.Request.Context(), code)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read code")
@@ -78,8 +88,13 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		return
 	}
 
+	chainID, err := uuid.NewV7()
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "server_error", "could not open chain")
+		return
+	}
 	chain := &store.Chain{
-		ID:                uuid.NewString(),
+		ID:                chainID,
 		ClientID:          client.ClientID,
 		UserID:            authCode.UserID,
 		Scope:             authCode.Scope,
@@ -110,12 +125,17 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "invalid refresh token")
 		return
 	}
-	if claims.CID != client.ClientID {
+	if claims.CID != client.ClientID.String() {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "token does not belong to client")
 		return
 	}
 
-	chain, err := h.appServices.TokenChains.GetChain(c.Request.Context(), claims.Chain)
+	chainID, err := uuid.Parse(claims.Chain)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown chain")
+		return
+	}
+	chain, err := h.appServices.TokenChains.GetChain(c.Request.Context(), chainID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read chain")
 		return
@@ -146,13 +166,13 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 }
 
 // issuePair mints an access+refresh pair and writes the token response.
-func (h *Handlers) issuePair(c *gin.Context, clientID, chainID, scope string) {
-	access, err := h.appServices.Issuer.IssueAccess(clientID, chainID, scope)
+func (h *Handlers) issuePair(c *gin.Context, clientID, chainID uuid.UUID, scope string) {
+	access, err := h.appServices.Issuer.IssueAccess(clientID.String(), chainID.String(), scope)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue access token")
 		return
 	}
-	refresh, _, err := h.appServices.Issuer.IssueRefresh(clientID, chainID, scope)
+	refresh, _, err := h.appServices.Issuer.IssueRefresh(clientID.String(), chainID.String(), scope)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue refresh token")
 		return

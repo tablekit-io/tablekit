@@ -9,6 +9,7 @@ import (
 	"core/services"
 	"core/services/oauth"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
@@ -26,7 +27,11 @@ func MCPRoute(appServices *services.Services) http.Handler {
 			if err != nil {
 				return nil, auth.ErrInvalidToken
 			}
-			bearerToken, err := appServices.BearerTokens.GetBearerToken(ctx, claims.ID)
+			tokenID, err := uuid.Parse(claims.ID)
+			if err != nil {
+				return nil, auth.ErrInvalidToken
+			}
+			bearerToken, err := appServices.BearerTokens.GetBearerToken(ctx, tokenID)
 			if err != nil || bearerToken == nil || bearerToken.Revoked {
 				return nil, auth.ErrInvalidToken
 			}

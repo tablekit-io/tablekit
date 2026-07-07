@@ -67,7 +67,7 @@ func TestSaveThenGet(t *testing.T) {
 func TestGetUnknownKeyReturnsNilNil(t *testing.T) {
 	repository, _ := newRepository(t)
 
-	got, err := repository.Get(context.Background(), "does-not-exist")
+	got, err := repository.Get(context.Background(), uuid.New())
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }

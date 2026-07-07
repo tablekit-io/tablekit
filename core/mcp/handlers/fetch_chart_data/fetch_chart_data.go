@@ -9,6 +9,7 @@ import (
 	"core/helpers"
 	"core/mcp/handlers/shared"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -52,7 +53,11 @@ func Register(s *mcp.Server, deps shared.Deps) {
 // called by the chart widget over the MCP Apps bridge, hidden from the agent.
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
-		descriptor, err := deps.Queries.Get(ctx, in.QueryKey)
+		queryID, err := uuid.Parse(in.QueryKey)
+		if err != nil {
+			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
+		}
+		descriptor, err := deps.Queries.Get(ctx, queryID)
 		if err != nil {
 			return nil, output{}, err
 		}

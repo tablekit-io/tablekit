@@ -2,11 +2,11 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,30 +22,33 @@ func TestPairingModes(t *testing.T) {
 		assert.Equal(t, PairingOnce, mode)
 		assert.Empty(t, paired)
 
-		ok, err := pairing.TryPair(ctx, "client-a")
+		clientA := uuid.New()
+		clientB := uuid.New()
+		ok, err := pairing.TryPair(ctx, clientA)
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		// Same client is idempotently allowed.
-		ok, err = pairing.TryPair(ctx, "client-a")
+		ok, err = pairing.TryPair(ctx, clientA)
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		// A different client is rejected; mode is now disabled.
-		ok, err = pairing.TryPair(ctx, "client-b")
+		ok, err = pairing.TryPair(ctx, clientB)
 		require.NoError(t, err)
 		assert.False(t, ok)
 
 		mode, paired, err = pairing.PairingStatus(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, PairingDisabled, mode)
-		assert.Equal(t, []string{"client-a"}, paired)
+		assert.Equal(t, []uuid.UUID{clientA}, paired)
 	})
 
 	t.Run("indefinite admits many", func(t *testing.T) {
 		pairing := NewPairingRepository(newDB(t))
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingIndefinite))
-		for _, id := range []string{"a", "b", "c"} {
+		ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+		for _, id := range ids {
 			ok, err := pairing.TryPair(ctx, id)
 			require.NoError(t, err)
 			assert.True(t, ok)
@@ -53,21 +56,22 @@ func TestPairingModes(t *testing.T) {
 		mode, paired, err := pairing.PairingStatus(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, PairingIndefinite, mode)
-		assert.ElementsMatch(t, []string{"a", "b", "c"}, paired)
+		assert.ElementsMatch(t, ids, paired)
 	})
 
 	t.Run("disabled rejects new but allows paired", func(t *testing.T) {
 		pairing := NewPairingRepository(newDB(t))
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingIndefinite))
-		_, err := pairing.TryPair(ctx, "known")
+		known := uuid.New()
+		_, err := pairing.TryPair(ctx, known)
 		require.NoError(t, err)
 
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingDisabled))
-		ok, err := pairing.TryPair(ctx, "stranger")
+		ok, err := pairing.TryPair(ctx, uuid.New())
 		require.NoError(t, err)
 		assert.False(t, ok)
 
-		ok, err = pairing.TryPair(ctx, "known")
+		ok, err = pairing.TryPair(ctx, known)
 		require.NoError(t, err)
 		assert.True(t, ok)
 	})
@@ -107,7 +111,8 @@ func TestTryPairConcurrent(t *testing.T) {
 	assert.Len(t, paired, 1)
 }
 
-func clientIDFor(i int) string {
-	b, _ := json.Marshal(i)
-	return "client-" + string(b)
+// clientIDFor returns a distinct client id per goroutine index; the concurrent
+// pairing race only needs the ids to differ, and every uuid.New() does.
+func clientIDFor(int) uuid.UUID {
+	return uuid.New()
 }

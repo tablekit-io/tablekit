@@ -13,7 +13,7 @@ import (
 // token value to hand out, its id (needed to revoke it later), and its expiry.
 type MintedBearer struct {
 	Token     string
-	ID        string
+	ID        uuid.UUID
 	ExpiresAt time.Time
 }
 
@@ -22,8 +22,14 @@ type MintedBearer struct {
 // URIs, no name. The returned Token is already prefixed (TokenPrefix) and ready
 // to hand out.
 func MintBearer(ctx context.Context, clients store.ClientRepository, tokens store.BearerTokenRepository, iss *Issuer) (MintedBearer, error) {
-	clientID := uuid.NewString()
-	tokenID := uuid.NewString()
+	clientID, err := uuid.NewV7()
+	if err != nil {
+		return MintedBearer{}, err
+	}
+	tokenID, err := uuid.NewV7()
+	if err != nil {
+		return MintedBearer{}, err
+	}
 	now := time.Now()
 
 	if err := clients.SaveClient(ctx, &store.Client{
@@ -36,7 +42,7 @@ func MintBearer(ctx context.Context, clients store.ClientRepository, tokens stor
 		return MintedBearer{}, err
 	}
 
-	token, expiresAt, err := iss.IssueBearer(clientID, tokenID)
+	token, expiresAt, err := iss.IssueBearer(clientID.String(), tokenID.String())
 	if err != nil {
 		return MintedBearer{}, err
 	}

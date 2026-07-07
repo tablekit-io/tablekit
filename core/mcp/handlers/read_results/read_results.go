@@ -9,6 +9,7 @@ import (
 	"core/helpers"
 	"core/mcp/handlers/shared"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -57,7 +58,11 @@ func Register(s *mcp.Server, deps shared.Deps) {
 // requested subset of columns.
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
-		descriptor, err := deps.Queries.Get(ctx, in.Key)
+		id, err := uuid.Parse(in.Key)
+		if err != nil {
+			return nil, output{}, fmt.Errorf("unknown result_key %q (run query_database first)", in.Key)
+		}
+		descriptor, err := deps.Queries.Get(ctx, id)
 		if err != nil {
 			return nil, output{}, err
 		}

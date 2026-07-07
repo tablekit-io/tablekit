@@ -9,11 +9,12 @@ package model
 
 import (
 	"core/db/dbjson"
+	"github.com/google/uuid"
 	"time"
 )
 
 type OAuthClients struct {
-	ClientID     string `sql:"primary_key"`
+	ClientID     uuid.UUID `sql:"primary_key"`
 	ClientName   *string
 	Type         string
 	RedirectUris dbjson.JSON[[]string]

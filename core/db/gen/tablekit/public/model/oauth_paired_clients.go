@@ -7,6 +7,10 @@
 
 package model
 
+import (
+	"github.com/google/uuid"
+)
+
 type OAuthPairedClients struct {
-	ClientID string `sql:"primary_key"`
+	ClientID uuid.UUID `sql:"primary_key"`
 }

@@ -25,7 +25,7 @@ import (
 // database it targets (by database_id, not the mutable databases.yaml name), the
 // read-only SQL to re-run, and the agent's plain-language intent.
 type Descriptor struct {
-	ID          string    `json:"id"`
+	ID          uuid.UUID `json:"id"`
 	DatabaseID  uuid.UUID `json:"database_id"`
 	SQL         string    `json:"sql"`
 	Description string    `json:"description"`
@@ -34,8 +34,8 @@ type Descriptor struct {
 
 // QueryRepository persists and loads Descriptors in the mcp_queries table.
 type QueryRepository interface {
-	Save(ctx context.Context, databaseID uuid.UUID, query, description string) (string, error)
-	Get(ctx context.Context, id string) (*Descriptor, error)
+	Save(ctx context.Context, databaseID uuid.UUID, query, description string) (uuid.UUID, error)
+	Get(ctx context.Context, id uuid.UUID) (*Descriptor, error)
 }
 
 type queryRepository struct {
@@ -50,28 +50,27 @@ func New(database *sql.DB) QueryRepository {
 
 // Save inserts a new descriptor and returns its generated key. The key is a
 // UUIDv7 (time-ordered), so keys sort by creation and don't leak a sequence.
-func (r *queryRepository) Save(ctx context.Context, databaseID uuid.UUID, query, description string) (string, error) {
+func (r *queryRepository) Save(ctx context.Context, databaseID uuid.UUID, query, description string) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
-		return "", fmt.Errorf("generate query id: %w", err)
+		return uuid.Nil, fmt.Errorf("generate query id: %w", err)
 	}
-	key := id.String()
 	stmt := table.McpQueries.
 		INSERT(table.McpQueries.ID, table.McpQueries.DatabaseID, table.McpQueries.SQL, table.McpQueries.Description).
-		VALUES(key, UUID(databaseID), query, description)
+		VALUES(UUID(id), UUID(databaseID), query, description)
 	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
-		return "", fmt.Errorf("save query: %w", err)
+		return uuid.Nil, fmt.Errorf("save query: %w", err)
 	}
-	return key, nil
+	return id, nil
 }
 
 // Get loads a descriptor by key. A key that doesn't exist is not an error: it
 // returns (nil, nil) so callers can turn an unknown key into a tool-level
 // message rather than a server error.
-func (r *queryRepository) Get(ctx context.Context, id string) (*Descriptor, error) {
+func (r *queryRepository) Get(ctx context.Context, id uuid.UUID) (*Descriptor, error) {
 	stmt := SELECT(table.McpQueries.AllColumns).
 		FROM(table.McpQueries).
-		WHERE(table.McpQueries.ID.EQ(String(id)))
+		WHERE(table.McpQueries.ID.EQ(UUID(id)))
 
 	var row model.McpQueries
 	err := stmt.QueryContext(ctx, r.database, &row)

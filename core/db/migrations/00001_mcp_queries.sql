@@ -4,7 +4,7 @@
 -- are NOT stored; read_results / fetch_chart_data / get_export_url re-run the
 -- SQL against the live database using this descriptor.
 CREATE TABLE mcp_queries (
-    id          TEXT PRIMARY KEY,
+    id          UUID PRIMARY KEY,
     database    TEXT NOT NULL,
     sql         TEXT NOT NULL,
     description TEXT NOT NULL,
