@@ -33,6 +33,7 @@ If only one database is configured, use it without asking. Resolve relative date
 	handlers.New(
 		appServices.Engine,
 		appServices.Queries,
+		appServices.Databases,
 		appServices.Issuer,
 		appServices.Config.PublicBaseURL,
 	).Register(server)

@@ -11,6 +11,7 @@ import (
 
 	"core/engine/config"
 	"core/engine/encoding"
+	"core/engine/identity"
 	"core/engine/transport/dbtls"
 	"core/engine/transport/sshtunnel"
 
@@ -22,26 +23,42 @@ import (
 // fires first and yields a clean error rather than a context cancellation.
 const connectGraceTimeout = 5 * time.Second
 
+// deriveTimeout bounds identity derivation, which is a single trivial query and
+// does not flow through the query Limits.
+const deriveTimeout = 10 * time.Second
+
 // Engine runs read-only queries against PostgreSQL.
 type Engine struct{}
 
-func (Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
+// dial builds the connection (structured details or DSN), opens the SSH tunnel
+// and applies TLS, then connects — the exact prologue Run and DeriveIdentity
+// share. The returned cleanup closes the connection and tears down the tunnel;
+// callers must apply their own deadline to ctx first (it bounds the connect).
+func dial(ctx context.Context, db config.Database) (*pgx.Conn, func(), error) {
 	connConfig, serverHost, err := connConfig(db)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
+	}
+
+	cleanups := []func(){}
+	runCleanups := func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
 	}
 
 	if db.SSH != nil {
 		target := net.JoinHostPort(connConfig.Host, strconv.Itoa(int(connConfig.Port)))
-		localAddr, cleanup, tunnelErr := sshtunnel.Open(db.SSH, target)
+		localAddr, tunnelCleanup, tunnelErr := sshtunnel.Open(db.SSH, target)
 		if tunnelErr != nil {
-			return nil, false, tunnelErr
+			return nil, nil, tunnelErr
 		}
-		defer cleanup()
+		cleanups = append(cleanups, tunnelCleanup)
 
 		host, portStr, splitErr := net.SplitHostPort(localAddr)
 		if splitErr != nil {
-			return nil, false, splitErr
+			runCleanups()
+			return nil, nil, splitErr
 		}
 		port, _ := strconv.Atoi(portStr)
 		connConfig.Host = host
@@ -50,21 +67,32 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, page co
 
 	tlsConfig, err := dbtls.BuildConfig(db.TLS, serverHost)
 	if err != nil {
-		return nil, false, err
+		runCleanups()
+		return nil, nil, err
 	}
 	connConfig.TLSConfig = tlsConfig
 	// Drop libpq-style fallbacks: each carries its own host/port/TLS and could
 	// bypass the tunnel and our TLS settings by retrying the real address.
 	connConfig.Fallbacks = nil
 
+	conn, err := pgx.ConnectConfig(ctx, connConfig)
+	if err != nil {
+		runCleanups()
+		return nil, nil, fmt.Errorf("connect: %w", err)
+	}
+	cleanups = append(cleanups, func() { conn.Close(context.Background()) })
+	return conn, runCleanups, nil
+}
+
+func (Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, limits.StatementTimeout+connectGraceTimeout)
 	defer cancel()
 
-	conn, err := pgx.ConnectConfig(ctx, connConfig)
+	conn, cleanup, err := dial(ctx, db)
 	if err != nil {
-		return nil, false, fmt.Errorf("connect: %w", err)
+		return nil, false, err
 	}
-	defer conn.Close(ctx)
+	defer cleanup()
 
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -119,6 +147,48 @@ func (Engine) Run(ctx context.Context, db config.Database, query string, page co
 	result := accumulator.Result()
 	hasMore := trimToLimit(result, page.Limit)
 	return result, hasMore, nil
+}
+
+// DeriveIdentity fingerprints the physical PostgreSQL database behind db by
+// reading the cluster's system_identifier plus the current database's oid and
+// name. system_identifier is minted at initdb and survives restarts, so together
+// with the database oid it pins the physical database independently of the
+// connection details in databases.yaml.
+func (Engine) DeriveIdentity(ctx context.Context, db config.Database) (identity.Identity, error) {
+	ctx, cancel := context.WithTimeout(ctx, deriveTimeout+connectGraceTimeout)
+	defer cancel()
+
+	conn, cleanup, err := dial(ctx, db)
+	if err != nil {
+		return identity.Identity{}, err
+	}
+	defer cleanup()
+
+	var (
+		systemIdentifier string
+		databaseOID      int
+		databaseName     string
+	)
+	row := conn.QueryRow(ctx, `
+		SELECT
+			system_identifier::text,
+			(SELECT oid::int FROM pg_database WHERE datname = current_database()) AS database_oid,
+			current_database() AS database_name
+		FROM pg_control_system()`)
+	if err := row.Scan(&systemIdentifier, &databaseOID, &databaseName); err != nil {
+		return identity.Identity{}, fmt.Errorf("derive identity: %w", err)
+	}
+
+	return identity.Identity{
+		Engine: string(config.DatabaseTypePostgres),
+		Key: fmt.Sprintf("pg-%s-%d",
+			identity.Sanitize(systemIdentifier), databaseOID),
+		Attributes: map[string]string{
+			"system_identifier": systemIdentifier,
+			"database_oid":      strconv.Itoa(databaseOID),
+			"database_name":     databaseName,
+		},
+	}, nil
 }
 
 // connConfig builds a pgx config from either structured details or a connection

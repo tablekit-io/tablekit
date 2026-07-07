@@ -62,12 +62,19 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			return nil, output{}, fmt.Errorf("description is required")
 		}
 
+		// Pin the physical database on first query: derive its stable identity and
+		// mint/match a database_id. A repointed name is caught here and on re-run.
+		databaseID, err := deps.Databases.Resolve(ctx, in.Database)
+		if err != nil {
+			return nil, output{}, err
+		}
+
 		result, hasMore, err := deps.Engine.RunReadOnlyPage(ctx, in.Database, in.SQL, shared.EnginePage(0, shared.DefaultLimit, 0))
 		if err != nil {
 			return nil, output{}, err
 		}
 
-		key, err := deps.Queries.Save(ctx, in.Database, in.SQL, in.Description)
+		key, err := deps.Queries.Save(ctx, databaseID, in.SQL, in.Description)
 		if err != nil {
 			return nil, output{}, err
 		}

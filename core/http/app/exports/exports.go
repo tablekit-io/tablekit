@@ -58,8 +58,14 @@ func (h *Handlers) handleExport(c *gin.Context) {
 		return
 	}
 
+	name, err := h.services.Databases.Verify(c.Request.Context(), descriptor.DatabaseID)
+	if err != nil {
+		c.String(http.StatusConflict, "%v", err)
+		return
+	}
+
 	result, _, err := h.services.Engine.RunReadOnlyPage(
-		c.Request.Context(), descriptor.Database, descriptor.SQL,
+		c.Request.Context(), name, descriptor.SQL,
 		engine.PageOptions{Limit: chartMaxRows, MaxBytes: chartMaxBytes},
 	)
 	if err != nil {

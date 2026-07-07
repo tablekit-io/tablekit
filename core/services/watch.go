@@ -100,5 +100,8 @@ func (s *Services) reloadDatabases(configured string) {
 		log.Printf("databases: reload failed, keeping previous set: %v", err)
 		return
 	}
+	// A reload is the one moment a name's connection details can change, so drop
+	// the cached name->database_id mappings and let the next query re-derive.
+	s.Databases.InvalidateCache()
 	log.Printf("databases: reloaded %d database(s) from %q", len(s.Engine.List()), path)
 }

@@ -11,6 +11,7 @@ package table
 // this method only once at the beginning of the program.
 func UseSchema(schema string) {
 	Config = Config.FromSchema(schema)
+	Databases = Databases.FromSchema(schema)
 	GooseDbVersion = GooseDbVersion.FromSchema(schema)
 	McpQueries = McpQueries.FromSchema(schema)
 	OAuthAuthCodes = OAuthAuthCodes.FromSchema(schema)

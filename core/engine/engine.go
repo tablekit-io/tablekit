@@ -17,6 +17,7 @@ import (
 	"core/engine/driver/mysql"
 	"core/engine/driver/postgres"
 	"core/engine/encoding"
+	"core/engine/identity"
 )
 
 // Limits, Result and OmittedColumn are surfaced from the subpackages that own
@@ -40,6 +41,10 @@ type DatabaseInfo struct {
 // dialect, over-fetches to detect more rows, and reports hasMore.
 type databaseEngine interface {
 	Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (result *encoding.Result, hasMore bool, err error)
+	// DeriveIdentity connects and fingerprints the physical database, so a name
+	// repointed at a different database in databases.yaml is detectable. It is a
+	// separate step from Run and carries its own short timeout.
+	DeriveIdentity(ctx context.Context, db config.Database) (identity.Identity, error)
 }
 
 // engineFor routes a database type to its implementation.
@@ -113,6 +118,23 @@ func (s *Service) RunReadOnly(ctx context.Context, databaseName, query string) (
 	}
 	result, _, err := implementation.Run(ctx, db, query, config.Page{Limit: s.limits.MaxRows}, s.limits)
 	return result, err
+}
+
+// DeriveIdentity connects to the named database and returns its physical-database
+// fingerprint. It routes to the engine implementation for the database's type,
+// exactly like RunReadOnly, but derives an Identity instead of running a query.
+// The caller (the databases resolver) uses it as the lazy first-query step that
+// mints or matches a stable database_id.
+func (s *Service) DeriveIdentity(ctx context.Context, databaseName string) (identity.Identity, error) {
+	db, ok := s.snapshot()[databaseName]
+	if !ok {
+		return identity.Identity{}, fmt.Errorf("unknown database %q", databaseName)
+	}
+	implementation, err := engineFor(db.Type)
+	if err != nil {
+		return identity.Identity{}, err
+	}
+	return implementation.DeriveIdentity(ctx, db)
 }
 
 // PageOptions tunes a single paginated run. Any zero field falls back to a

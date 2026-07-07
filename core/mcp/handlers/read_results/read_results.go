@@ -74,7 +74,14 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			limit = shared.MaxLimit
 		}
 
-		result, hasMore, err := deps.Engine.RunReadOnlyPage(ctx, descriptor.Database, descriptor.SQL, shared.EnginePage(skip, limit, 0))
+		// Confirm the descriptor's database_id still resolves to the same physical
+		// database the query was saved against, then run against that name.
+		name, err := deps.Databases.Verify(ctx, descriptor.DatabaseID)
+		if err != nil {
+			return nil, output{}, err
+		}
+
+		result, hasMore, err := deps.Engine.RunReadOnlyPage(ctx, name, descriptor.SQL, shared.EnginePage(skip, limit, 0))
 		if err != nil {
 			return nil, output{}, err
 		}

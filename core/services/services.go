@@ -11,6 +11,7 @@ import (
 	"core/db"
 	"core/engine"
 	"core/services/config"
+	"core/services/databases"
 	"core/services/oauth"
 	"core/services/queries"
 	"core/services/store"
@@ -29,6 +30,7 @@ type Services struct {
 	Issuer       *oauth.Issuer
 	DB           *sql.DB
 	Queries      queries.QueryRepository
+	Databases    *databases.Resolver
 }
 
 // New loads config from the environment, opens the on-disk store, and loads the
@@ -72,6 +74,7 @@ func New() (*Services, error) {
 		Issuer:       issuer,
 		DB:           database,
 		Queries:      queries.New(database),
+		Databases:    databases.NewResolver(engineService, databases.NewRepository(database)),
 	}, nil
 }
 

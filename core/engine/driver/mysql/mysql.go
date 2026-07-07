@@ -15,6 +15,7 @@ import (
 
 	"core/engine/config"
 	"core/engine/encoding"
+	"core/engine/identity"
 	"core/engine/transport/dbtls"
 	"core/engine/transport/sshtunnel"
 
@@ -25,6 +26,10 @@ import (
 // deadline outlives the server-side cap; the server's timeout then fires first
 // and yields a clean error rather than a context cancellation.
 const connectGraceTimeout = 5 * time.Second
+
+// deriveTimeout bounds identity derivation, which is a single trivial query and
+// does not flow through the query Limits.
+const deriveTimeout = 10 * time.Second
 
 // Engine runs read-only queries against MySQL and MariaDB. The two flavours
 // differ only in the statement that arms the server-side query timeout, which is
@@ -46,46 +51,70 @@ func NewMariaDB() Engine {
 	}}
 }
 
-func (e Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
+// dial builds the go-sql-driver config (structured details or DSN), opens the
+// SSH tunnel and applies TLS, then pins a single connection — the exact prologue
+// Run and DeriveIdentity share. Pinning one connection ensures session-scoped
+// settings (the statement timeout, the read-only transaction) run on the same
+// physical connection. The returned cleanup closes the connection and the pool
+// (which tears down the tunnel via the connector); callers must apply their own
+// deadline to ctx first.
+func dial(ctx context.Context, db config.Database) (*sql.Conn, func(), error) {
 	cfg, serverHost, err := connConfig(db)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
+	}
+
+	cleanups := []func(){}
+	runCleanups := func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
 	}
 
 	if db.SSH != nil {
-		localAddr, cleanup, tunnelErr := sshtunnel.Open(db.SSH, cfg.Addr)
+		localAddr, tunnelCleanup, tunnelErr := sshtunnel.Open(db.SSH, cfg.Addr)
 		if tunnelErr != nil {
-			return nil, false, tunnelErr
+			return nil, nil, tunnelErr
 		}
-		defer cleanup()
+		cleanups = append(cleanups, tunnelCleanup)
 		cfg.Addr = localAddr
 		cfg.Net = "tcp"
 	}
 
 	tlsConfig, err := dbtls.BuildConfig(db.TLS, serverHost)
 	if err != nil {
-		return nil, false, err
+		runCleanups()
+		return nil, nil, err
 	}
 	cfg.TLS = tlsConfig
 	cfg.Timeout = sshtunnel.DialTimeout
 
+	connector, err := gomysql.NewConnector(cfg)
+	if err != nil {
+		runCleanups()
+		return nil, nil, fmt.Errorf("build connector: %w", err)
+	}
+	pool := sql.OpenDB(connector)
+	cleanups = append(cleanups, func() { pool.Close() })
+
+	conn, err := pool.Conn(ctx)
+	if err != nil {
+		runCleanups()
+		return nil, nil, fmt.Errorf("connect: %w", err)
+	}
+	cleanups = append(cleanups, func() { conn.Close() })
+	return conn, runCleanups, nil
+}
+
+func (e Engine) Run(ctx context.Context, db config.Database, query string, page config.Page, limits config.Limits) (*encoding.Result, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, limits.StatementTimeout+connectGraceTimeout)
 	defer cancel()
 
-	connector, err := gomysql.NewConnector(cfg)
+	conn, cleanup, err := dial(ctx, db)
 	if err != nil {
-		return nil, false, fmt.Errorf("build connector: %w", err)
+		return nil, false, err
 	}
-	pool := sql.OpenDB(connector)
-	defer pool.Close()
-
-	// Pin a single connection so the session timeout and the read-only
-	// transaction run on the same physical connection.
-	conn, err := pool.Conn(ctx)
-	if err != nil {
-		return nil, false, fmt.Errorf("connect: %w", err)
-	}
-	defer conn.Close()
+	defer cleanup()
 
 	// Best-effort: not every server build supports the timeout variable.
 	_, _ = conn.ExecContext(ctx, e.timeoutStatement(limits.StatementTimeout))
@@ -142,6 +171,41 @@ func (e Engine) Run(ctx context.Context, db config.Database, query string, page 
 	result := accumulator.Result()
 	hasMore := trimToLimit(result, page.Limit)
 	return result, hasMore, nil
+}
+
+// DeriveIdentity fingerprints the physical MySQL/MariaDB database behind db by
+// reading @@server_uuid (minted at first boot, persisted in auto.cnf) plus the
+// active schema. Together they pin the physical database independently of the
+// connection details in databases.yaml. The engine prefix comes from db.Type so
+// the same code serves both flavours. A connection with no default schema yields
+// an empty schema segment (see the schema-less DSN caveat in the design notes).
+func (Engine) DeriveIdentity(ctx context.Context, db config.Database) (identity.Identity, error) {
+	ctx, cancel := context.WithTimeout(ctx, deriveTimeout+connectGraceTimeout)
+	defer cancel()
+
+	conn, cleanup, err := dial(ctx, db)
+	if err != nil {
+		return identity.Identity{}, err
+	}
+	defer cleanup()
+
+	var (
+		serverUUID string
+		schema     sql.NullString
+	)
+	if err := conn.QueryRowContext(ctx, "SELECT @@server_uuid, DATABASE()").Scan(&serverUUID, &schema); err != nil {
+		return identity.Identity{}, fmt.Errorf("derive identity: %w", err)
+	}
+
+	return identity.Identity{
+		Engine: string(db.Type),
+		Key: fmt.Sprintf("%s-%s-%s",
+			db.Type, identity.Sanitize(serverUUID), identity.Sanitize(schema.String)),
+		Attributes: map[string]string{
+			"server_uuid": serverUUID,
+			"schema":      schema.String,
+		},
+	}, nil
 }
 
 // connConfig builds a go-sql-driver config from either structured details or a

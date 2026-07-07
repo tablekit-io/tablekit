@@ -57,6 +57,11 @@ func main() {
 									field.Type = template.NewType(dbjson.JSON[[]string]{})
 								case table.Name == "config" && column.Name == "value":
 									field.Type = template.NewType(json.RawMessage{})
+								case table.Name == "databases" && column.Name == "identity":
+									// The identity fingerprint is a flat string map whose
+									// keys differ per engine (system_identifier/database_oid
+									// vs server_uuid/schema) — typed as map[string]string.
+									field.Type = template.NewType(dbjson.JSON[map[string]string]{})
 								}
 								return field
 							})

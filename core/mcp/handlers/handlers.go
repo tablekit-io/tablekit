@@ -16,6 +16,7 @@ import (
 	showbarlineareachart "core/mcp/handlers/show_bar_line_area_chart"
 	showpiedonutsunburstchart "core/mcp/handlers/show_pie_donut_sunburst_chart"
 	"core/mcp/ui"
+	"core/services/databases"
 	"core/services/oauth"
 	"core/services/queries"
 
@@ -31,10 +32,11 @@ type Handlers struct {
 }
 
 // New wires the MCP tool handlers to their dependencies.
-func New(engineService *engine.Service, queriesRepo queries.QueryRepository, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
+func New(engineService *engine.Service, queriesRepo queries.QueryRepository, resolver *databases.Resolver, issuer *oauth.Issuer, publicBaseURL string) *Handlers {
 	return &Handlers{deps: shared.Deps{
 		Engine:        engineService,
 		Queries:       queriesRepo,
+		Databases:     resolver,
 		Issuer:        issuer,
 		PublicBaseURL: publicBaseURL,
 	}}

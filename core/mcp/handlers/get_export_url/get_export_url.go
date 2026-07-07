@@ -64,6 +64,13 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 
+		// Fail at link-mint time if the database was repointed, rather than handing
+		// out a link that only errors when downloaded. The exports endpoint verifies
+		// again when the link is fetched.
+		if _, err := deps.Databases.Verify(ctx, descriptor.DatabaseID); err != nil {
+			return nil, output{}, err
+		}
+
 		token, err := deps.Issuer.IssueExport(in.QueryKey)
 		if err != nil {
 			return nil, output{}, err

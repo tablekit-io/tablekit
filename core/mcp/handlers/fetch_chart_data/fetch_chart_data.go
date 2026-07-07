@@ -60,7 +60,12 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 
-		result, _, err := deps.Engine.RunReadOnlyPage(ctx, descriptor.Database, descriptor.SQL, shared.EnginePage(0, shared.ChartMaxRows, shared.ChartMaxBytes))
+		name, err := deps.Databases.Verify(ctx, descriptor.DatabaseID)
+		if err != nil {
+			return nil, output{}, err
+		}
+
+		result, _, err := deps.Engine.RunReadOnlyPage(ctx, name, descriptor.SQL, shared.EnginePage(0, shared.ChartMaxRows, shared.ChartMaxBytes))
 		if err != nil {
 			return nil, output{}, err
 		}

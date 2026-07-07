@@ -18,10 +18,10 @@ type mcpQueriesTable struct {
 
 	// Columns
 	ID          postgres.ColumnString
-	Database    postgres.ColumnString
 	SQL         postgres.ColumnString
 	Description postgres.ColumnString
 	CreatedAt   postgres.ColumnTimestampz
+	DatabaseID  postgres.ColumnString
 
 	AllColumns     postgres.ColumnList
 	MutableColumns postgres.ColumnList
@@ -64,12 +64,12 @@ func newMcpQueriesTable(schemaName, tableName, alias string) *McpQueriesTable {
 func newMcpQueriesTableImpl(schemaName, tableName, alias string) mcpQueriesTable {
 	var (
 		IDColumn          = postgres.StringColumn("id")
-		DatabaseColumn    = postgres.StringColumn("database")
 		SQLColumn         = postgres.StringColumn("sql")
 		DescriptionColumn = postgres.StringColumn("description")
 		CreatedAtColumn   = postgres.TimestampzColumn("created_at")
-		allColumns        = postgres.ColumnList{IDColumn, DatabaseColumn, SQLColumn, DescriptionColumn, CreatedAtColumn}
-		mutableColumns    = postgres.ColumnList{DatabaseColumn, SQLColumn, DescriptionColumn, CreatedAtColumn}
+		DatabaseIDColumn  = postgres.StringColumn("database_id")
+		allColumns        = postgres.ColumnList{IDColumn, SQLColumn, DescriptionColumn, CreatedAtColumn, DatabaseIDColumn}
+		mutableColumns    = postgres.ColumnList{SQLColumn, DescriptionColumn, CreatedAtColumn, DatabaseIDColumn}
 		defaultColumns    = postgres.ColumnList{CreatedAtColumn}
 	)
 
@@ -78,10 +78,10 @@ func newMcpQueriesTableImpl(schemaName, tableName, alias string) mcpQueriesTable
 
 		//Columns
 		ID:          IDColumn,
-		Database:    DatabaseColumn,
 		SQL:         SQLColumn,
 		Description: DescriptionColumn,
 		CreatedAt:   CreatedAtColumn,
+		DatabaseID:  DatabaseIDColumn,
 
 		AllColumns:     allColumns,
 		MutableColumns: mutableColumns,

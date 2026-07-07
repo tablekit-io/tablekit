@@ -8,14 +8,17 @@
 package model
 
 import (
+	"core/db/dbjson"
 	"github.com/google/uuid"
 	"time"
 )
 
-type McpQueries struct {
-	ID          string `sql:"primary_key"`
-	SQL         string
-	Description string
+type Databases struct {
+	ID          uuid.UUID `sql:"primary_key"`
+	Name        string
+	Type        string
+	IdentityKey string
+	Identity    dbjson.JSON[map[string]string]
 	CreatedAt   time.Time
-	DatabaseID  uuid.UUID
+	UpdatedAt   time.Time
 }

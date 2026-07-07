@@ -21,11 +21,12 @@ import (
 	. "github.com/go-jet/jet/v2/postgres"
 )
 
-// Descriptor is one stored query: the key clients pass around, the database it
-// targets, the read-only SQL to re-run, and the agent's plain-language intent.
+// Descriptor is one stored query: the key clients pass around, the physical
+// database it targets (by database_id, not the mutable databases.yaml name), the
+// read-only SQL to re-run, and the agent's plain-language intent.
 type Descriptor struct {
 	ID          string    `json:"id"`
-	Database    string    `json:"database"`
+	DatabaseID  uuid.UUID `json:"database_id"`
 	SQL         string    `json:"sql"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -33,7 +34,7 @@ type Descriptor struct {
 
 // QueryRepository persists and loads Descriptors in the mcp_queries table.
 type QueryRepository interface {
-	Save(ctx context.Context, database, query, description string) (string, error)
+	Save(ctx context.Context, databaseID uuid.UUID, query, description string) (string, error)
 	Get(ctx context.Context, id string) (*Descriptor, error)
 }
 
@@ -49,15 +50,15 @@ func New(database *sql.DB) QueryRepository {
 
 // Save inserts a new descriptor and returns its generated key. The key is a
 // UUIDv7 (time-ordered), so keys sort by creation and don't leak a sequence.
-func (r *queryRepository) Save(ctx context.Context, database, query, description string) (string, error) {
+func (r *queryRepository) Save(ctx context.Context, databaseID uuid.UUID, query, description string) (string, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return "", fmt.Errorf("generate query id: %w", err)
 	}
 	key := id.String()
 	stmt := table.McpQueries.
-		INSERT(table.McpQueries.ID, table.McpQueries.Database, table.McpQueries.SQL, table.McpQueries.Description).
-		VALUES(key, database, query, description)
+		INSERT(table.McpQueries.ID, table.McpQueries.DatabaseID, table.McpQueries.SQL, table.McpQueries.Description).
+		VALUES(key, UUID(databaseID), query, description)
 	if _, err := stmt.ExecContext(ctx, r.database); err != nil {
 		return "", fmt.Errorf("save query: %w", err)
 	}
@@ -82,7 +83,7 @@ func (r *queryRepository) Get(ctx context.Context, id string) (*Descriptor, erro
 	}
 	return &Descriptor{
 		ID:          row.ID,
-		Database:    row.Database,
+		DatabaseID:  row.DatabaseID,
 		SQL:         row.SQL,
 		Description: row.Description,
 		CreatedAt:   row.CreatedAt,
