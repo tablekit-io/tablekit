@@ -66,10 +66,17 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "${DB_PASSWORD:-postgres}"
       POSTGRES_DB: tablekit
+
+    ports:
+      - published: 5432
+        target: 5432
+        protocol: tcp
+
     volumes:
       - type: volume
         source: pgdata
         target: /var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tablekit"]
       interval: 5s
