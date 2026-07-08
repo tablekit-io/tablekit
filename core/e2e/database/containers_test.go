@@ -85,7 +85,7 @@ func ensureCafeSeed(t *testing.T) string {
 	if _, err := os.Stat(seedPath); err == nil {
 		return seedPath
 	}
-	cmd := exec.Command("go", "run", "generate_cafe_data.go")
+	cmd := exec.Command("go", "run", ".")
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "generate cafe_data.sql: %s", out)

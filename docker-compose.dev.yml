@@ -127,7 +127,7 @@ services:
   #
   # cafe_data.sql is a generator artifact (gitignored). Generate it before the
   # first `docker compose up`, else the bind mount below has no source file:
-  #   (cd core/e2e/database/test-data && go run generate_cafe_data.go)
+  #   (cd core/e2e/database/test-data && go run .)
   example-cafe-db:
     image: postgres:17
     environment:
