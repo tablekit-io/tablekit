@@ -38,7 +38,7 @@ type output struct {
 
 // Register adds the query_database tool. Read-only, but touches external
 // databases, so OpenWorldHint is true.
-func Register(s *mcp.Server, deps shared.QueryDeps) {
+func Register(s *mcp.Server, deps shared.Deps) {
 	tool := &mcp.Tool{
 		Name:        "query_database",
 		Description: "Run read-only SQL on a database. It stores the query, and returns a result_key plus first-page stats (in order to be token efficient). Use the result key with read_results to paginate over the results. Use the result key with show_bar_line_area_chart / show_pie_donut_sunburst_chart to visualize with charts. Rows are not stored — each follow-up re-runs the query against live data. Use list_available_databases to discover database names. The stored SQL is reviewed by humans, so always annotate it with concise -- comments explaining what each ambiguous part of the query does and why it is being done.",
@@ -56,7 +56,7 @@ func Register(s *mcp.Server, deps shared.QueryDeps) {
 // result_key the agent passes to read_results / show_bar_line_area_chart /
 // show_pie_donut_sunburst_chart / get_export_url. It persists nothing but the query
 // text (not the rows): the other tools re-run the stored SQL against the live database.
-func handle(deps shared.QueryDeps) mcp.ToolHandlerFor[input, output] {
+func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		if in.Description == "" {
 			return nil, output{}, fmt.Errorf("description is required")

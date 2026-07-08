@@ -33,7 +33,7 @@ type output struct {
 // Register adds the app-only chart data loader. The _meta.ui.visibility=['app']
 // marks it app-only — the host hides it from the model and only honours it when
 // a chart widget calls it over the bridge.
-func Register(s *mcp.Server, deps shared.QueryDeps) {
+func Register(s *mcp.Server, deps shared.Deps) {
 	tool := &mcp.Tool{
 		Name:        "fetch_chart_data",
 		Description: "Returns the full result of a stored query for a chart widget to render. App-only: called by the chart widgets over the MCP Apps bridge, hidden from the agent.",
@@ -51,7 +51,7 @@ func Register(s *mcp.Server, deps shared.QueryDeps) {
 // handle loads the whole result of a stored query for a chart widget. It re-runs
 // the stored SQL with the raised chart row/byte caps and no offset. App-only:
 // called by the chart widget over the MCP Apps bridge, hidden from the agent.
-func handle(deps shared.QueryDeps) mcp.ToolHandlerFor[input, output] {
+func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		queryID, err := uuid.Parse(in.QueryKey)
 		if err != nil {

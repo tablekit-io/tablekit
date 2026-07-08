@@ -39,7 +39,7 @@ type output struct {
 
 // Register adds the read_results tool. Read-only, re-runs the stored query
 // against an external database, so OpenWorldHint is true.
-func Register(s *mcp.Server, deps shared.QueryDeps) {
+func Register(s *mcp.Server, deps shared.Deps) {
 	tool := &mcp.Tool{
 		Name:        "read_results",
 		Description: "Returns a paginated view of a query result. Pass the result_key from query_database, plus optional skip/limit and an optional column subset. Each call re-runs the stored SQL at the requested offset against live data; use has_more / next_skip to page.",
@@ -56,7 +56,7 @@ func Register(s *mcp.Server, deps shared.QueryDeps) {
 // handle pages through a stored query's rows. It re-runs the stored SQL at the
 // requested offset/limit (rows are never cached), then optionally narrows to a
 // requested subset of columns.
-func handle(deps shared.QueryDeps) mcp.ToolHandlerFor[input, output] {
+func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		id, err := uuid.Parse(in.Key)
 		if err != nil {
