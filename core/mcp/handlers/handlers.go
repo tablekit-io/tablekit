@@ -44,13 +44,13 @@ func New(engineService *engine.Service, queriesRepo queries.QueryRepository, res
 
 // Register wires every tool and the built widget UI resources onto s.
 func (h *Handlers) Register(s *mcp.Server) {
-	listavailabledatabases.Register(s, h.deps)
-	querydatabase.Register(s, h.deps)
-	readresults.Register(s, h.deps)
-	fetchchartdata.Register(s, h.deps)
+	listavailabledatabases.Register(s, h.deps.Engine)
+	querydatabase.Register(s, h.deps.Query())
+	readresults.Register(s, h.deps.Query())
+	fetchchartdata.Register(s, h.deps.Query())
 	showbarlineareachart.Register(s, h.deps)
 	showpiedonutsunburstchart.Register(s, h.deps)
-	getexporturl.Register(s, h.deps)
+	getexporturl.Register(s, h.deps.Export())
 	registerWidgetResources(s)
 }
 

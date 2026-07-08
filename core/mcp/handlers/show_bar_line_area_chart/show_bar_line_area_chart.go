@@ -46,7 +46,7 @@ type input struct {
 }
 
 // Register adds the bar/line/area chart tool, linking the shared chart widget.
-func Register(s *mcp.Server, deps shared.Deps) {
+func Register(s *mcp.Server, guard shared.QueryGuard) {
 	tool := &mcp.Tool{
 		Name:        "show_bar_line_area_chart",
 		Description: "Use this for bar charts, line charts, area charts or any combination of them. Shows a chart visualization widget for a result_key received from query_database. All chart types support stacking. Needs one X axis column and one or more Y series. Pass the result_key from query_database plus the axis/series mapping. The chart widget loads the rows itself using the result_key. Note: users can view original SQL in the rendered chart widget, also the table of data which they can download as JSON or CSV.",
@@ -60,18 +60,18 @@ func Register(s *mcp.Server, deps shared.Deps) {
 		tool.Meta = mcp.Meta{"ui": map[string]any{"resourceUri": uri}}
 	}
 	tool.InputSchema = shared.InputSchema[input](schemaJSON)
-	mcp.AddTool(s, tool, handle(deps))
+	mcp.AddTool(s, tool, handle(guard))
 }
 
 // handle renders the stored query as a bar/line/area chart. Like the donut demo
 // the structured result is only a discriminator: the linked widget reads this
 // tool's arguments and loads its own data via the app-only fetch_chart_data.
-func handle(deps shared.Deps) mcp.ToolHandlerFor[input, shared.ChartRenderOutput] {
+func handle(guard shared.QueryGuard) mcp.ToolHandlerFor[input, shared.ChartRenderOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, shared.ChartRenderOutput, error) {
 		if len(in.Y) == 0 {
 			return nil, shared.ChartRenderOutput{}, fmt.Errorf("at least one y series is required")
 		}
-		if err := deps.RequireQuery(ctx, in.QueryKey); err != nil {
+		if err := guard.RequireQuery(ctx, in.QueryKey); err != nil {
 			return nil, shared.ChartRenderOutput{}, err
 		}
 		return shared.ChartRenderResult("show_bar_line_area_chart", "bar/line/area chart")

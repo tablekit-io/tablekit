@@ -33,7 +33,7 @@ type output struct {
 // download button calls it over the MCP Apps bridge and opens the link in the
 // user's real browser. An export link is a user-facing download affordance, not
 // something the agent needs to reason about.
-func Register(s *mcp.Server, deps shared.Deps) {
+func Register(s *mcp.Server, deps shared.ExportDeps) {
 	tool := &mcp.Tool{
 		Name:        "get_export_url",
 		Description: "Returns a short-lived signed URL that downloads the full result of a stored query as CSV or JSON. App-only: called by the chart widget's download button over the MCP Apps bridge, hidden from the agent.",
@@ -51,7 +51,7 @@ func Register(s *mcp.Server, deps shared.Deps) {
 // handle returns a short-lived signed URL that downloads the full result of a
 // stored query as CSV or JSON. The URL points at the /exports endpoint, which
 // re-runs the stored query when fetched; the link is the only credential needed.
-func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
+func handle(deps shared.ExportDeps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		if in.Format != "csv" && in.Format != "json" {
 			return nil, output{}, fmt.Errorf("format must be \"csv\" or \"json\", got %q", in.Format)

@@ -26,7 +26,7 @@ type output struct {
 }
 
 // Register adds the list_available_databases tool to s.
-func Register(s *mcp.Server, deps shared.Deps) {
+func Register(s *mcp.Server, engineService *engine.Service) {
 	tool := &mcp.Tool{
 		Name:        "list_available_databases",
 		Description: "Lists the databases that query_database can run against, each with its name and engine type (postgres/mysql/mariadb). Does not return credentials nor connection details.",
@@ -38,14 +38,14 @@ func Register(s *mcp.Server, deps shared.Deps) {
 		},
 	}
 	tool.InputSchema = shared.InputSchema[input](schemaJSON)
-	mcp.AddTool(s, tool, handle(deps))
+	mcp.AddTool(s, tool, handle(engineService))
 }
 
 // handle returns the databases query_database can run against. It never exposes
 // hosts, credentials or any connection detail.
-func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
+func handle(engineService *engine.Service) mcp.ToolHandlerFor[input, output] {
 	return func(_ context.Context, _ *mcp.CallToolRequest, _ input) (*mcp.CallToolResult, output, error) {
-		databases := deps.Engine.List()
+		databases := engineService.List()
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{
 				Text: fmt.Sprintf("%d database(s) configured.", len(databases)),

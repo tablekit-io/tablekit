@@ -16,16 +16,52 @@ import (
 	"github.com/google/uuid"
 )
 
-// Deps carries the dependencies the tools need: the query engine, the
+// Deps is the full dependency set for the MCP tools: the query engine, the
 // stored-query repository, the physical-database identity resolver, the JWT
 // issuer (for signed export URLs) and the public base URL those URLs are built
-// against.
+// against. It is the aggregate the parent handlers package constructs and wires;
+// individual tools take only the narrow slice they need (Query, Export or the
+// QueryGuard interface) rather than the whole bundle.
 type Deps struct {
 	Engine        *engine.Service
 	Queries       queries.QueryRepository
 	Databases     *databases.Resolver
 	Issuer        *oauth.Issuer
 	PublicBaseURL string
+}
+
+// QueryDeps is what the query-execution tools (query_database, read_results,
+// fetch_chart_data) need: run SQL against a resolved physical database and
+// save/load the stored query descriptor.
+type QueryDeps struct {
+	Engine    *engine.Service
+	Queries   queries.QueryRepository
+	Databases *databases.Resolver
+}
+
+// ExportDeps is what get_export_url needs: verify the stored query's database,
+// then mint a signed download URL against the public base URL.
+type ExportDeps struct {
+	Queries       queries.QueryRepository
+	Databases     *databases.Resolver
+	Issuer        *oauth.Issuer
+	PublicBaseURL string
+}
+
+// QueryGuard is the single capability the chart tools need: confirm a stored
+// query exists before rendering a widget for it. Deps satisfies it.
+type QueryGuard interface {
+	RequireQuery(ctx context.Context, key string) error
+}
+
+// Query returns the query-execution slice of the dependencies.
+func (d Deps) Query() QueryDeps {
+	return QueryDeps{Engine: d.Engine, Queries: d.Queries, Databases: d.Databases}
+}
+
+// Export returns the export-signing slice of the dependencies.
+func (d Deps) Export() ExportDeps {
+	return ExportDeps{Queries: d.Queries, Databases: d.Databases, Issuer: d.Issuer, PublicBaseURL: d.PublicBaseURL}
 }
 
 // RequireQuery confirms a stored query exists for key, turning an unknown key

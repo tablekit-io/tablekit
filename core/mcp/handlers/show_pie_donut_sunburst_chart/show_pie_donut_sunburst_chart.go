@@ -34,7 +34,7 @@ type input struct {
 }
 
 // Register adds the proportional chart tool, linking the shared chart widget.
-func Register(s *mcp.Server, deps shared.Deps) {
+func Register(s *mcp.Server, guard shared.QueryGuard) {
 	tool := &mcp.Tool{
 		Name:        "show_pie_donut_sunburst_chart",
 		Description: "Use this for donut or pie charts. Shows a proportional chart visualization widget for a result_key received from query_database. Both chart types support stacking, stacking will result in a sunburst chart. Needs the value column and one or more grouping layers (inner-most ring first). Pass the result_key from query_database along with the columns & grouping. The chart widget loads the rows itself using the result_key. Note: users can view original SQL in the rendered chart widget, also the table of data which they can download as JSON or CSV.",
@@ -48,13 +48,13 @@ func Register(s *mcp.Server, deps shared.Deps) {
 		tool.Meta = mcp.Meta{"ui": map[string]any{"resourceUri": uri}}
 	}
 	tool.InputSchema = shared.InputSchema[input](schemaJSON)
-	mcp.AddTool(s, tool, handle(deps))
+	mcp.AddTool(s, tool, handle(guard))
 }
 
 // handle renders the stored query as a proportional (pie/donut/sunburst) chart.
 // The structured result is only a discriminator; the linked widget reads this
 // tool's arguments and loads rows via the app-only fetch_chart_data.
-func handle(deps shared.Deps) mcp.ToolHandlerFor[input, shared.ChartRenderOutput] {
+func handle(guard shared.QueryGuard) mcp.ToolHandlerFor[input, shared.ChartRenderOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, shared.ChartRenderOutput, error) {
 		if in.ValueProp == "" {
 			return nil, shared.ChartRenderOutput{}, fmt.Errorf("value_prop is required")
@@ -62,7 +62,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, shared.ChartRenderOutput
 		if len(in.Layers) == 0 {
 			return nil, shared.ChartRenderOutput{}, fmt.Errorf("at least one layer is required")
 		}
-		if err := deps.RequireQuery(ctx, in.QueryKey); err != nil {
+		if err := guard.RequireQuery(ctx, in.QueryKey); err != nil {
 			return nil, shared.ChartRenderOutput{}, err
 		}
 		return shared.ChartRenderResult("show_pie_donut_sunburst_chart", "pie/donut/sunburst chart")
