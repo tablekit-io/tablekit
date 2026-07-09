@@ -21,3 +21,6 @@ core/mcp/ui/widgets/manifest.json
 /databases.yml
 /databases.example.yml
 /docker-compose.example.yml
+
+/.claude
+/graphify-out
