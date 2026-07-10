@@ -30,7 +30,6 @@ type cartesianSeries struct {
 	ValueSuffix string  `json:"value_suffix,omitempty"`
 	DisplayAs   string  `json:"display_as,omitempty"`
 	Shape       string  `json:"shape,omitempty"`
-	ColorHue    float64 `json:"color_hue,omitempty"`
 	StackGroup  string  `json:"stack_group,omitempty"`
 }
 

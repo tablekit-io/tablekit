@@ -2,7 +2,7 @@
 // tool's mapping into Recharts-ready models. Kept free of JSX/DOM so the mapping
 // logic is easy to read; the Chart tab in main.tsx renders these with shadcn's
 // chart components. Colors use the default shadcn chart tokens (--chart-1..5),
-// theme-aware for free; an explicit color_hue overrides.
+// which are theme-aware for free.
 import {type ChartConfig} from '@/components/ui/chart';
 
 // Row is one result row keyed by column name, as fetch_chart_data returns it.
@@ -22,7 +22,6 @@ export type CartesianInput = {
         readonly value_suffix?: string;
         readonly display_as?: 'line' | 'area' | 'bar';
         readonly shape?: 'line' | 'discrete' | 'curve';
-        readonly color_hue?: number;
         readonly stack_group?: string;
     }>;
 };
@@ -44,18 +43,9 @@ const num = (value: unknown): number => {
     return Number.isFinite(n) ? n : 0;
 };
 
-// colorAt picks a slice/series color: the shadcn default palette cycled over
-// --chart-1..5, or an explicit hue when the render tool supplied a valid one.
-// The hue is coerced to a finite 0–359 number so a malformed value can never
-// produce a color string that breaks out of the generated <style> (see the
-// SAFE_COLOR guard in components/ui/chart.tsx).
-const colorAt = (index: number, hue?: number): string => {
-    const h = Number(hue);
-    if (Number.isFinite(h)) {
-        return `hsl(${((h % 360) + 360) % 360} 65% 50%)`;
-    }
-    return `var(--chart-${(index % 5) + 1})`;
-};
+// colorAt picks a slice/series color from the shadcn default palette, cycling
+// over --chart-1..5.
+const colorAt = (index: number): string => `var(--chart-${(index % 5) + 1})`;
 
 // CartesianSeries describes one Y series for the ComposedChart.
 export type CartesianSeries = {
@@ -109,7 +99,7 @@ export function toCartesianModel(
                       : 'bar',
             type: s.shape === 'curve' ? 'monotone' : 'linear',
             stackId: s.stack_group || undefined,
-            color: colorAt(i, s.color_hue),
+            color: colorAt(i),
             format: (value: number): string => `${prefix}${value}${suffix}`,
         };
     });

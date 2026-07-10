@@ -64,10 +64,6 @@
             "enum": ["line", "discrete", "curve"],
             "description": "line shape (default discrete; ignored for bars)"
           },
-          "color_hue": {
-            "type": "number",
-            "description": "hue 0-360; omit for a stable auto hue derived from axes_label"
-          },
           "stack_group": {
             "type": "string",
             "description": "series sharing a stack_group are stacked; others sit side by side"

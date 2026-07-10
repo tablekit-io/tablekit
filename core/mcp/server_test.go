@@ -123,6 +123,7 @@ func TestChartToolsAdvertiseEnums(t *testing.T) {
 	series := barSchema["properties"].(map[string]any)["y"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	assert.ElementsMatch(t, []any{"line", "area", "bar"}, series["display_as"].(map[string]any)["enum"])
 	assert.ElementsMatch(t, []any{"line", "discrete", "curve"}, series["shape"].(map[string]any)["enum"])
+	assert.NotContains(t, series, "color_hue")
 
 	// show_pie_donut_sunburst_chart: display.
 	pieSchema := marshalToMap(t, tools["show_pie_donut_sunburst_chart"].InputSchema)
