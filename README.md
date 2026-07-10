@@ -29,13 +29,13 @@ https://github.com/user-attachments/assets/424b887a-3f22-47ff-9df6-2a3b2837e86a
 
 ### Supported Chart Types
 
-1. 📊 Bar Chart
-2. 📈 Line Chart / Area Chart
-3. 🍩 Pie Chart / Donut Chart
-4. ☀️ Sunburst Chart (also known as a stacked donut chart)
-5. `COMING SOON` 👯 Cohort Charts / Table Charts
-6. `COMING SOON` 🌡️ Gauge / Progress
-7. `COMING SOON` 💯 Number / Stat
+1. Bar Chart
+2. Line Chart / Area Chart
+3. Pie Chart / Donut Chart
+4. Sunburst Chart
+5. `COMING SOON` Cohort Chart / Table Chart
+6. `COMING SOON` Gauge / Progress
+7. `COMING SOON` Number / Stat
 
 ## Quickstart
 
