@@ -12,6 +12,7 @@ import (
 	"core/services/store"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 )
 
 // Token audiences distinguish access from refresh tokens so a refresh token
@@ -77,10 +78,12 @@ func init() {
 // no generated fallback — so a missing key fails startup with a clear message.
 func NewIssuer(configService *config.Config) (*Issuer, error) {
 	if configService.SigningKey == "" {
+		log.Error().Msg("SIGNING_KEY is required (base64 HS256 secret)")
 		return nil, errors.New("SIGNING_KEY is required (base64 HS256 secret); generate one with `openssl rand -base64 32`")
 	}
 	key, err := store.DecodeSigningKey(configService.SigningKey)
 	if err != nil {
+		log.Error().Err(err).Msg("SIGNING_KEY invalid (base64 decode failed)")
 		return nil, err
 	}
 	return &Issuer{configService: configService, key: key}, nil

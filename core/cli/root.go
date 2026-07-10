@@ -1,8 +1,7 @@
 package cli
 
 import (
-	"log"
-
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +13,7 @@ var rootCmd = &cobra.Command{
 // Execute runs the root command and exits on error.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("command failed")
 	}
 }
 

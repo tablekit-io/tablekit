@@ -16,6 +16,8 @@ import (
 	"core/services/queries"
 	"core/services/requests"
 	"core/services/store"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Services holds the shared services every layer needs. The store aggregate is
@@ -43,6 +45,7 @@ func New() (*Services, error) {
 	// in it (the signing key lives only in the SIGNING_KEY env, not on disk).
 	database, err := db.Open(configService.DatabaseDSN())
 	if err != nil {
+		log.Error().Err(err).Msg("failed to open state database")
 		return nil, err
 	}
 	// Resolve .yaml/.yml by base name (dies if both exist) for the initial load.
@@ -51,6 +54,7 @@ func New() (*Services, error) {
 	// created after startup) — see WatchDatabasesFile.
 	resolvedDatabasesFile, err := config.ResolveDatabasesFile(configService.DatabasesFile)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to resolve databases file")
 		return nil, err
 	}
 	engineService, err := engine.Load(resolvedDatabasesFile, engine.Limits{
@@ -59,12 +63,15 @@ func New() (*Services, error) {
 		MaxBytes:         64 * 1024,
 	})
 	if err != nil {
+		log.Error().Err(err).Msg("failed to load databases config")
 		return nil, err
 	}
 	issuer, err := oauth.NewIssuer(configService)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to initialize token issuer")
 		return nil, err
 	}
+	log.Info().Msg("services ready")
 	return &Services{
 		Config:       configService,
 		Clients:      store.NewClientRepository(database),
@@ -85,7 +92,10 @@ func New() (*Services, error) {
 // Call it on shutdown.
 func (s *Services) Close() error {
 	if s.DB != nil {
-		return s.DB.Close()
+		if err := s.DB.Close(); err != nil {
+			log.Warn().Err(err).Msg("state database close failed")
+			return err
+		}
 	}
 	return nil
 }

@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"log"
 	"path/filepath"
 	"time"
 
 	"core/services/config"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/rs/zerolog/log"
 )
 
 // reloadDebounce is how long WatchDatabasesFile waits after the last filesystem
@@ -34,16 +34,16 @@ func (s *Services) WatchDatabasesFile(ctx context.Context) error {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("databases: file watch disabled (cannot create watcher): %v", err)
+		log.Warn().Err(err).Msg("hot-reload disabled: cannot create fsnotify watcher")
 		return nil
 	}
 	defer watcher.Close()
 
 	if err := watcher.Add(directory); err != nil {
-		log.Printf("databases: file watch disabled (cannot watch %q): %v", directory, err)
+		log.Warn().Err(err).Str("directory", directory).Msg("hot-reload disabled: cannot watch directory")
 		return nil
 	}
-	log.Printf("databases: watching %q for changes", configured)
+	log.Info().Str("file", configured).Msg("watching databases file for changes")
 
 	// A single shared timer debounces the event burst. It starts stopped; the
 	// first relevant event arms it, and its firing triggers the reload.
@@ -69,7 +69,7 @@ func (s *Services) WatchDatabasesFile(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			log.Printf("databases: file watch error: %v", err)
+			log.Error().Err(err).Msg("databases file watch error")
 		case <-debounce.C:
 			s.reloadDatabases(configured)
 		}
@@ -93,15 +93,15 @@ func relevantEvent(eventPath, target string) bool {
 func (s *Services) reloadDatabases(configured string) {
 	path, err := config.ResolveDatabasesFile(configured)
 	if err != nil {
-		log.Printf("databases: reload failed, keeping previous set: %v", err)
+		log.Warn().Err(err).Msg("databases reload failed (resolve), keeping previous set")
 		return
 	}
 	if err := s.Engine.Reload(path); err != nil {
-		log.Printf("databases: reload failed, keeping previous set: %v", err)
+		log.Warn().Err(err).Msg("databases reload failed (parse/validate), keeping previous set")
 		return
 	}
 	// A reload is the one moment a name's connection details can change, so drop
 	// the cached name->database_id mappings and let the next query re-derive.
 	s.Databases.InvalidateCache()
-	log.Printf("databases: reloaded %d database(s) from %q", len(s.Engine.List()), path)
+	log.Info().Int("count", len(s.Engine.List())).Str("path", path).Msg("databases reloaded")
 }

@@ -19,6 +19,7 @@ import (
 	"core/logging"
 
 	"github.com/pressly/goose/v3"
+	"github.com/rs/zerolog/log"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver, registered as "pgx"
 )
@@ -46,16 +47,20 @@ const (
 func Open(dsn string) (*sql.DB, error) {
 	database, err := sql.Open("pgx", dsn)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to open postgres handle")
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
 	if err := waitReady(database); err != nil {
+		log.Error().Err(err).Msg("postgres not ready")
 		database.Close()
 		return nil, err
 	}
 	if err := Migrate(database); err != nil {
+		log.Error().Err(err).Msg("migrations failed")
 		database.Close()
 		return nil, err
 	}
+	log.Info().Msg("state database connected & migrated")
 	return database, nil
 }
 

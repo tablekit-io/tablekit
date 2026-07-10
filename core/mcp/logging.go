@@ -24,14 +24,33 @@ func loggingMiddleware(logRecorder requests.RequestLog) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
+			toolName := toolNameOf(req)
+			clientID := clientIDOf(req)
+
+			// Log the incoming request (not the response): a tool invocation is
+			// info-level signal, other MCP methods (initialize, tools/list, …) are
+			// debug. Payloads stay out of stdout — they go to the audit row below.
+			if toolName != "" {
+				log.Info().Str("method", method).Str("tool", toolName).Str("client_id", clientID).Msg("mcp tool call")
+			} else {
+				log.Debug().Str("method", method).Str("client_id", clientID).Msg("mcp request")
+			}
+
 			result, err := next(ctx, method, req)
+
+			durationMS := int(time.Since(start).Milliseconds())
+			if err != nil {
+				log.Debug().Str("method", method).Str("tool", toolName).Str("client_id", clientID).Int("duration_ms", durationMS).Err(err).Msg("mcp tool error")
+			} else {
+				log.Debug().Str("method", method).Str("tool", toolName).Str("client_id", clientID).Int("duration_ms", durationMS).Msg("mcp tool response")
+			}
 
 			entry := requests.Entry{
 				Method:     method,
-				ToolName:   toolNameOf(req),
-				ClientID:   clientIDOf(req),
+				ToolName:   toolName,
+				ClientID:   clientID,
 				Params:     marshalOrNil(req),
-				DurationMS: int(time.Since(start).Milliseconds()),
+				DurationMS: durationMS,
 			}
 			if err != nil {
 				entry.Error = marshalError(err)

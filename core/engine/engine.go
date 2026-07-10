@@ -18,6 +18,8 @@ import (
 	"core/engine/driver/postgres"
 	"core/engine/encoding"
 	"core/engine/identity"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Limits, Result and OmittedColumn are surfaced from the subpackages that own
@@ -80,6 +82,11 @@ func Load(path string, limits Limits) (*Service, error) {
 	}
 	service := &Service{limits: limits.WithDefaults()}
 	service.databases.Store(&databases)
+	if len(databases) == 0 {
+		log.Warn().Str("path", path).Msg("no databases configured, starting empty")
+	} else {
+		log.Info().Int("count", len(databases)).Str("path", path).Msg("engine loaded databases")
+	}
 	return service, nil
 }
 

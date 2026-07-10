@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // HandleToken implements POST /oauth/token for the authorization_code and
@@ -24,11 +25,18 @@ func (h *Handlers) HandleToken(c *gin.Context) {
 	}
 	clientID, err := uuid.Parse(rawClientID)
 	if err != nil {
+		log.Warn().Str("client_id", rawClientID).Msg("token rejected: unparseable client_id")
 		sendError(c, http.StatusUnauthorized, "invalid_client", "unknown client_id")
 		return
 	}
 	client, err := h.appServices.Clients.GetClient(c.Request.Context(), clientID)
-	if err != nil || client == nil {
+	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("token: client lookup failed")
+		sendError(c, http.StatusUnauthorized, "invalid_client", "unknown client_id")
+		return
+	}
+	if client == nil {
+		log.Warn().Str("client_id", clientID.String()).Msg("token rejected: unknown client_id")
 		sendError(c, http.StatusUnauthorized, "invalid_client", "unknown client_id")
 		return
 	}
@@ -39,6 +47,7 @@ func (h *Handlers) HandleToken(c *gin.Context) {
 	case "refresh_token":
 		h.refreshGrant(c, client)
 	default:
+		log.Warn().Str("client_id", clientID.String()).Str("grant_type", grantType).Msg("token rejected: unsupported grant_type")
 		sendError(c, http.StatusBadRequest, "unsupported_grant_type",
 			"only authorization_code and refresh_token are supported")
 	}
@@ -59,32 +68,39 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 
 	authCode, err := h.appServices.AuthCodes.ConsumeCode(c.Request.Context(), rawCode)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", client.ClientID.String()).Msg("code grant: consume code failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read code")
 		return
 	}
 	if authCode == nil {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("code grant rejected: unknown or used code")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown or used code")
 		return
 	}
 	if time.Now().After(authCode.ExpiresAt) {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("code grant rejected: code expired")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "code expired")
 		return
 	}
 	if authCode.ClientID != client.ClientID {
+		log.Warn().Str("client_id", client.ClientID.String()).Str("code_client_id", authCode.ClientID.String()).Msg("code grant rejected: client mismatch")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "client mismatch")
 		return
 	}
 	if authCode.RedirectURI != redirectURI {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("code grant rejected: redirect_uri mismatch")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "redirect_uri mismatch")
 		return
 	}
 	if !oauth.VerifyPKCE(codeVerifier, authCode.CodeChallenge) {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("code grant rejected: PKCE check failed")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "PKCE check failed")
 		return
 	}
 
 	chainID, err := uuid.NewV7()
 	if err != nil {
+		log.Error().Err(err).Str("client_id", client.ClientID.String()).Msg("code grant: chain id generation failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not open chain")
 		return
 	}
@@ -98,6 +114,7 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		CreatedAt:         time.Now(),
 	}
 	if err := h.appServices.TokenChains.NewChain(c.Request.Context(), chain); err != nil {
+		log.Error().Err(err).Str("client_id", client.ClientID.String()).Str("chain_id", chain.ID.String()).Msg("code grant: new chain failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not open chain")
 		return
 	}
@@ -117,29 +134,35 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 
 	claims, err := h.appServices.Issuer.VerifyRefresh(refreshToken)
 	if err != nil {
+		log.Warn().Err(err).Str("client_id", client.ClientID.String()).Msg("refresh rejected: invalid refresh token")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "invalid refresh token")
 		return
 	}
 	if claims.CID != client.ClientID.String() {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("refresh rejected: token does not belong to client")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "token does not belong to client")
 		return
 	}
 
 	chainID, err := uuid.Parse(claims.Chain)
 	if err != nil {
+		log.Warn().Str("client_id", client.ClientID.String()).Msg("refresh rejected: unparseable chain id")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown chain")
 		return
 	}
 	chain, err := h.appServices.TokenChains.GetChain(c.Request.Context(), chainID)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", client.ClientID.String()).Str("chain_id", chainID.String()).Msg("refresh: get chain failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read chain")
 		return
 	}
 	if chain == nil {
+		log.Warn().Str("client_id", client.ClientID.String()).Str("chain_id", chainID.String()).Msg("refresh rejected: unknown chain")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown chain")
 		return
 	}
 	if chain.Revoked() {
+		log.Warn().Str("client_id", client.ClientID.String()).Str("chain_id", chainID.String()).Msg("refresh rejected: chain revoked")
 		sendError(c, http.StatusBadRequest, "invalid_grant", "chain revoked")
 		return
 	}
@@ -147,12 +170,16 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 	issuedAt := claims.IssuedAt.Time
 	if !issuedAt.After(chain.InvalidatedBefore) {
 		// Replay of an already-rotated token: kill the whole chain.
-		_ = h.appServices.TokenChains.RevokeChain(c.Request.Context(), chain.ID)
+		log.Warn().Str("client_id", client.ClientID.String()).Str("chain_id", chain.ID.String()).Msg("refresh token reuse detected, revoking chain")
+		if revokeErr := h.appServices.TokenChains.RevokeChain(c.Request.Context(), chain.ID); revokeErr != nil {
+			log.Error().Err(revokeErr).Str("chain_id", chain.ID.String()).Msg("refresh: revoke chain failed during reuse handling")
+		}
 		sendError(c, http.StatusBadRequest, "invalid_grant", "refresh token reuse detected")
 		return
 	}
 
 	if err := h.appServices.TokenChains.BumpCutoff(c.Request.Context(), chain.ID, issuedAt); err != nil {
+		log.Error().Err(err).Str("chain_id", chain.ID.String()).Msg("refresh: bump cutoff failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not rotate chain")
 		return
 	}
@@ -164,14 +191,17 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 func (h *Handlers) issuePair(c *gin.Context, clientID, chainID uuid.UUID, scope string) {
 	access, err := h.appServices.Issuer.IssueAccess(clientID.String(), chainID.String(), scope)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Str("chain_id", chainID.String()).Msg("issue: access token minting failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue access token")
 		return
 	}
 	refresh, _, err := h.appServices.Issuer.IssueRefresh(clientID.String(), chainID.String(), scope)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Str("chain_id", chainID.String()).Msg("issue: refresh token minting failed")
 		sendError(c, http.StatusInternalServerError, "server_error", "could not issue refresh token")
 		return
 	}
+	log.Info().Str("client_id", clientID.String()).Str("chain_id", chainID.String()).Str("scope", scope).Msg("tokens issued")
 
 	noStoreJSON(c, gin.H{
 		"access_token":  access,

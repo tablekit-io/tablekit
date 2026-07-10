@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed schema.json
@@ -60,13 +61,16 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		id, err := uuid.Parse(in.Key)
 		if err != nil {
+			log.Warn().Str("key", in.Key).Msg("read_results unknown key")
 			return nil, output{}, fmt.Errorf("unknown result_key %q (run query_database first)", in.Key)
 		}
 		descriptor, err := deps.Queries.Get(ctx, id)
 		if err != nil {
+			log.Error().Str("key", in.Key).Err(err).Msg("read_results descriptor load failed")
 			return nil, output{}, err
 		}
 		if descriptor == nil {
+			log.Warn().Str("key", in.Key).Msg("read_results unknown key")
 			return nil, output{}, fmt.Errorf("unknown result_key %q (run query_database first)", in.Key)
 		}
 
@@ -83,11 +87,13 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		// database the query was saved against, then run against that name.
 		name, err := deps.Databases.Verify(ctx, descriptor.DatabaseID)
 		if err != nil {
+			log.Warn().Str("key", in.Key).Err(err).Msg("read_results verify failed (repointed?)")
 			return nil, output{}, err
 		}
 
 		result, hasMore, err := deps.Engine.RunReadOnlyPage(ctx, name, descriptor.SQL, shared.EnginePage(skip, limit, 0))
 		if err != nil {
+			log.Error().Str("key", in.Key).Err(err).Msg("read_results engine run failed")
 			return nil, output{}, err
 		}
 

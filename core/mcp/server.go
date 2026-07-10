@@ -11,6 +11,7 @@ import (
 	"core/services"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 // newServer builds the MCP server and registers its tools and resources, wired
@@ -42,7 +43,11 @@ If only one database is configured, use it without asking. Resolve relative date
 	// when no audit log is wired (e.g. in-memory server tests without a database).
 	if appServices.Requests != nil {
 		server.AddReceivingMiddleware(loggingMiddleware(appServices.Requests))
+		log.Debug().Msg("MCP audit middleware enabled")
+	} else {
+		log.Debug().Msg("MCP audit middleware disabled (no request log)")
 	}
+	log.Info().Str("name", "tablekit").Str("version", "0.1.0").Msg("MCP server ready")
 	return server
 }
 

@@ -11,6 +11,7 @@ import (
 	"core/mcp/ui"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed schema.json
@@ -57,12 +58,15 @@ func Register(s *mcp.Server, deps shared.Deps) {
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, shared.ChartRenderOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, shared.ChartRenderOutput, error) {
 		if in.ValueProp == "" {
+			log.Warn().Str("query_key", in.QueryKey).Msg("chart validation failed: value_prop required")
 			return nil, shared.ChartRenderOutput{}, fmt.Errorf("value_prop is required")
 		}
 		if len(in.Layers) == 0 {
+			log.Warn().Str("query_key", in.QueryKey).Msg("chart validation failed: no layers")
 			return nil, shared.ChartRenderOutput{}, fmt.Errorf("at least one layer is required")
 		}
 		if err := deps.RequireQuery(ctx, in.QueryKey); err != nil {
+			log.Warn().Str("query_key", in.QueryKey).Err(err).Msg("chart query_key not found")
 			return nil, shared.ChartRenderOutput{}, err
 		}
 		return shared.ChartRenderResult("show_pie_donut_sunburst_chart", "pie/donut/sunburst chart")

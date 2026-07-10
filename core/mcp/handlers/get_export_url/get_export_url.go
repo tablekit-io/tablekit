@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed schema.json
@@ -54,18 +55,22 @@ func Register(s *mcp.Server, deps shared.Deps) {
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		if in.Format != "csv" && in.Format != "json" {
+			log.Warn().Str("format", in.Format).Msg("get_export_url invalid format")
 			return nil, output{}, fmt.Errorf("format must be \"csv\" or \"json\", got %q", in.Format)
 		}
 
 		queryID, err := uuid.Parse(in.QueryKey)
 		if err != nil {
+			log.Warn().Str("query_key", in.QueryKey).Msg("get_export_url unknown query_key")
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 		descriptor, err := deps.Queries.Get(ctx, queryID)
 		if err != nil {
+			log.Error().Str("query_key", in.QueryKey).Err(err).Msg("get_export_url descriptor load failed")
 			return nil, output{}, err
 		}
 		if descriptor == nil {
+			log.Warn().Str("query_key", in.QueryKey).Msg("get_export_url unknown query_key")
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 
@@ -73,11 +78,13 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		// out a link that only errors when downloaded. The exports endpoint verifies
 		// again when the link is fetched.
 		if _, err := deps.Databases.Verify(ctx, descriptor.DatabaseID); err != nil {
+			log.Warn().Str("query_key", in.QueryKey).Err(err).Msg("get_export_url verify failed (repointed?)")
 			return nil, output{}, err
 		}
 
 		token, err := deps.Issuer.IssueExport(in.QueryKey)
 		if err != nil {
+			log.Error().Str("query_key", in.QueryKey).Err(err).Msg("get_export_url token issue failed")
 			return nil, output{}, err
 		}
 		url := fmt.Sprintf("%s/exports/%s/%s", deps.PublicBaseURL, in.Format, token)

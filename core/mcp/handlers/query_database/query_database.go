@@ -10,6 +10,7 @@ import (
 	"core/mcp/handlers/shared"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed schema.json
@@ -59,12 +60,14 @@ func Register(s *mcp.Server, deps shared.Deps) {
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		if in.Description == "" {
+			log.Warn().Str("database", in.Database).Msg("query_database missing description")
 			return nil, output{}, fmt.Errorf("description is required")
 		}
 
 		// Attribute the stored query to the calling client (queries.client_id).
 		clientID, err := shared.ClientID(req)
 		if err != nil {
+			log.Error().Str("database", in.Database).Err(err).Msg("query_database resolve failed")
 			return nil, output{}, err
 		}
 
@@ -72,16 +75,19 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		// mint/match a database_id. A repointed name is caught here and on re-run.
 		databaseID, err := deps.Databases.Resolve(ctx, in.Database)
 		if err != nil {
+			log.Error().Str("database", in.Database).Err(err).Msg("query_database resolve failed")
 			return nil, output{}, err
 		}
 
 		result, hasMore, err := deps.Engine.RunReadOnlyPage(ctx, in.Database, in.SQL, shared.EnginePage(0, shared.DefaultLimit, 0))
 		if err != nil {
+			log.Error().Str("database", in.Database).Err(err).Msg("query_database engine run failed")
 			return nil, output{}, err
 		}
 
 		key, err := deps.Queries.Save(ctx, databaseID, clientID, in.SQL, in.Description)
 		if err != nil {
+			log.Error().Str("database", in.Database).Err(err).Msg("query_database store failed")
 			return nil, output{}, err
 		}
 

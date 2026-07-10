@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed schema.json
@@ -55,26 +56,32 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		queryID, err := uuid.Parse(in.QueryKey)
 		if err != nil {
+			log.Warn().Str("query_key", in.QueryKey).Msg("fetch_chart_data unknown query_key")
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 		descriptor, err := deps.Queries.Get(ctx, queryID)
 		if err != nil {
+			log.Error().Str("query_key", in.QueryKey).Err(err).Msg("fetch_chart_data descriptor load failed")
 			return nil, output{}, err
 		}
 		if descriptor == nil {
+			log.Warn().Str("query_key", in.QueryKey).Msg("fetch_chart_data unknown query_key")
 			return nil, output{}, fmt.Errorf("unknown query_key %q (run query_database first)", in.QueryKey)
 		}
 
 		name, err := deps.Databases.Verify(ctx, descriptor.DatabaseID)
 		if err != nil {
+			log.Warn().Str("query_key", in.QueryKey).Err(err).Msg("fetch_chart_data verify failed")
 			return nil, output{}, err
 		}
 
 		result, _, err := deps.Engine.RunReadOnlyPage(ctx, name, descriptor.SQL, shared.EnginePage(0, shared.ChartMaxRows, shared.ChartMaxBytes))
 		if err != nil {
+			log.Error().Str("query_key", in.QueryKey).Err(err).Msg("fetch_chart_data engine run failed")
 			return nil, output{}, err
 		}
 		if result.Truncated {
+			log.Warn().Str("query_key", in.QueryKey).Msg("fetch_chart_data result too large to chart")
 			return nil, output{}, fmt.Errorf("result is too large to chart (exceeds the chart size cap)")
 		}
 

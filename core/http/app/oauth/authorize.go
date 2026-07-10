@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // authCodeTTL bounds how long an issued authorization code stays redeemable.
@@ -48,6 +49,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	}
 	clientID, err := uuid.Parse(rawClientID)
 	if err != nil {
+		log.Warn().Str("client_id", rawClientID).Msg("authorize rejected: unparseable client_id")
 		authorizeError(c, "unknown client_id")
 		return
 	}
@@ -66,11 +68,13 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 
 	client, err := h.appServices.Clients.GetClient(c.Request.Context(), clientID)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: error loading client")
 		authorizeError(c, "internal error loading client")
 		return
 	}
 	if client == nil {
 		if !h.appServices.Config.IsDevelopment() {
+			log.Warn().Str("client_id", clientID.String()).Msg("authorize rejected: unknown client_id")
 			authorizeError(c, "unknown client_id")
 			return
 		}
@@ -86,11 +90,14 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 			CreatedAt:    time.Now(),
 		}
 		if err := h.appServices.Clients.SaveClient(c.Request.Context(), client); err != nil {
+			log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: self-heal client create failed")
 			authorizeError(c, "internal error creating client")
 			return
 		}
+		log.Warn().Str("client_id", clientID.String()).Msg("unknown client self-healed (dev)")
 	}
 	if !slices.Contains(client.RedirectURIs, redirectURI) {
+		log.Warn().Str("client_id", clientID.String()).Str("redirect_uri", redirectURI).Msg("authorize rejected: redirect_uri not registered")
 		authorizeError(c, "redirect_uri not registered for this client")
 		return
 	}
@@ -98,10 +105,12 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	// Pairing gate: allowed if already paired or the mode permits a new client.
 	allowed, err := h.appServices.Pairing.TryPair(c.Request.Context(), clientID)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: pairing check failed")
 		authorizeError(c, "internal error during pairing")
 		return
 	}
 	if !allowed {
+		log.Warn().Str("client_id", clientID.String()).Msg("authorize rejected: already paired with another client")
 		renderAlreadyPaired(c, redirectURI, state)
 		return
 	}
@@ -111,6 +120,7 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 	}
 	code, err := uuid.NewV7()
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: code id generation failed")
 		authorizeError(c, "internal error issuing code")
 		return
 	}
@@ -125,12 +135,15 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		UserID:        oauth.UserID,
 		ExpiresAt:     time.Now().Add(authCodeTTL),
 	}); err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: put code failed")
 		authorizeError(c, "internal error issuing code")
 		return
 	}
+	log.Info().Str("client_id", clientID.String()).Str("scope", scope).Msg("authorization code issued")
 
 	target, err := url.Parse(redirectURI)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", clientID.String()).Msg("authorize: malformed redirect_uri")
 		authorizeError(c, "malformed redirect_uri")
 		return
 	}

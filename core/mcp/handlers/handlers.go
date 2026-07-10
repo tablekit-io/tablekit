@@ -21,6 +21,7 @@ import (
 	"core/services/queries"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 // Handlers serves the MCP tools. It carries the dependencies the tools need: the
@@ -52,6 +53,7 @@ func (h *Handlers) Register(s *mcp.Server) {
 	showpiedonutsunburstchart.Register(s, h.deps)
 	getexporturl.Register(s, h.deps)
 	registerWidgetResources(s)
+	log.Info().Int("tools", 7).Msg("MCP tools registered")
 }
 
 // registerWidgetResources registers the built widget templates as ui:// resources
