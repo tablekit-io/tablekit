@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"time"
 
+	"core/logging"
+
 	"github.com/pressly/goose/v3"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver, registered as "pgx"
@@ -74,6 +76,9 @@ func waitReady(database *sql.DB) error {
 // the applied revisions in its own goose_db_version table, so a second call is a
 // no-op. It is exported so tests can migrate an isolated database directly.
 func Migrate(database *sql.DB) error {
+	// Route goose's own progress output ("goose: no migrations to run") through
+	// zerolog so it is emitted as JSON rather than goose's raw stdlib format.
+	goose.SetLogger(logging.GooseLogger())
 	goose.SetBaseFS(migrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("set goose dialect: %w", err)

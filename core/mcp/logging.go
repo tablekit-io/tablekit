@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"time"
 
 	"core/services/requests"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 // loggingMiddleware records every MCP request in the mcp_requests audit log. It
@@ -20,7 +20,7 @@ import (
 // is best-effort: a failure to write the audit row is logged and swallowed so it
 // never breaks the real MCP request, whose (result, err) is always returned
 // unchanged.
-func loggingMiddleware(log requests.RequestLog) mcp.Middleware {
+func loggingMiddleware(logRecorder requests.RequestLog) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
@@ -38,8 +38,8 @@ func loggingMiddleware(log requests.RequestLog) mcp.Middleware {
 			} else {
 				entry.Result = marshalOrNil(result)
 			}
-			if logErr := log.Log(ctx, entry); logErr != nil {
-				slog.Error("mcp request audit log failed", "method", method, "error", logErr)
+			if logErr := logRecorder.Log(ctx, entry); logErr != nil {
+				log.Error().Str("method", method).Err(logErr).Msg("mcp request audit log failed")
 			}
 			return result, err
 		}
