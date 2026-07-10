@@ -51,8 +51,8 @@ var pairingDisableCmd = &cobra.Command{
 
 var pairingTokenGenerateCmd = &cobra.Command{
 	Use:   "token:generate",
-	Short: "Mint a long-lived bearer token (valid 6 months) for MCP access",
-	Long: "Mint a long-lived bearer token a client can present as\n" +
+	Short: "Mint a long-lived static token (valid 6 months) for MCP access",
+	Long: "Mint a long-lived static token a client can present as\n" +
 		"`Authorization: Bearer <token>` to reach /mcp without the OAuth flow.\n" +
 		"Note the printed token id: it is needed to revoke the token later.",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,7 +61,7 @@ var pairingTokenGenerateCmd = &cobra.Command{
 			return err
 		}
 
-		minted, err := oauth.MintBearer(cmd.Context(), appServices.Clients, appServices.BearerTokens, appServices.Issuer)
+		minted, err := oauth.MintStatic(cmd.Context(), appServices.Clients, appServices.StaticTokens, appServices.Issuer)
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ var pairingTokenGenerateCmd = &cobra.Command{
 
 var pairingTokenRevokeCmd = &cobra.Command{
 	Use:   "token:revoke <id OR token>",
-	Short: "Revoke a bearer token by its id or the token itself",
+	Short: "Revoke a static token by its id or the token itself",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		appServices, err := services.New()
@@ -84,11 +84,11 @@ var pairingTokenRevokeCmd = &cobra.Command{
 			return err
 		}
 
-		// Accept either the bearer token id or the token itself, so a user who
+		// Accept either the static token id or the token itself, so a user who
 		// kept the token but lost the id can still revoke it.
 		rawID := args[0]
 		if rawJWT, ok := strings.CutPrefix(rawID, oauth.TokenPrefix); ok {
-			id, err := oauth.BearerTokenID(rawJWT)
+			id, err := oauth.StaticTokenID(rawJWT)
 			if err != nil {
 				return fmt.Errorf("could not read token id from token: %w", err)
 			}
@@ -97,12 +97,12 @@ var pairingTokenRevokeCmd = &cobra.Command{
 
 		tokenID, err := uuid.Parse(rawID)
 		if err != nil {
-			return fmt.Errorf("invalid bearer token id %q", rawID)
+			return fmt.Errorf("invalid static token id %q", rawID)
 		}
-		if err := appServices.BearerTokens.RevokeBearerToken(cmd.Context(), tokenID); err != nil {
+		if err := appServices.StaticTokens.RevokeStaticToken(cmd.Context(), tokenID); err != nil {
 			return err
 		}
-		fmt.Printf("revoked bearer token %s\n", tokenID)
+		fmt.Printf("revoked static token %s\n", tokenID)
 		return nil
 	},
 }

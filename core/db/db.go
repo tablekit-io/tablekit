@@ -21,11 +21,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver, registered as "pgx"
 )
 
-// migrations holds the goose SQL migrations, embedded so the binary needs no
-// migration files on disk. Each is an ordered NNNNN_name.sql with +goose
-// Up/Down sections.
+// migrations is the goose migrations directory. The schema is a single
+// registered Go migration (see schema.go) rather than .sql files, so this
+// directory only holds a placeholder — but goose still requires the directory to
+// exist in the base FS, so it is embedded.
 //
-//go:embed migrations/*.sql
+//go:embed migrations
 var migrations embed.FS
 
 // pingRetries and pingInterval bound the wait for Postgres to start accepting
@@ -69,7 +70,7 @@ func waitReady(database *sql.DB) error {
 	return fmt.Errorf("postgres not ready after %s: %w", time.Duration(pingRetries)*pingInterval, err)
 }
 
-// Migrate applies all pending embedded migrations. It is idempotent: goose tracks
+// Migrate applies the registered schema migration. It is idempotent: goose tracks
 // the applied revisions in its own goose_db_version table, so a second call is a
 // no-op. It is exported so tests can migrate an isolated database directly.
 func Migrate(database *sql.DB) error {

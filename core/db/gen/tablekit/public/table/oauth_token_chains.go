@@ -22,7 +22,7 @@ type oAuthTokenChainsTable struct {
 	UserID            postgres.ColumnString
 	Scope             postgres.ColumnString
 	RedirectURI       postgres.ColumnString
-	Revoked           postgres.ColumnBool
+	RevokedAt         postgres.ColumnTimestampz
 	InvalidatedBefore postgres.ColumnTimestampz
 	CreatedAt         postgres.ColumnTimestampz
 
@@ -71,12 +71,12 @@ func newOAuthTokenChainsTableImpl(schemaName, tableName, alias string) oAuthToke
 		UserIDColumn            = postgres.StringColumn("user_id")
 		ScopeColumn             = postgres.StringColumn("scope")
 		RedirectURIColumn       = postgres.StringColumn("redirect_uri")
-		RevokedColumn           = postgres.BoolColumn("revoked")
+		RevokedAtColumn         = postgres.TimestampzColumn("revoked_at")
 		InvalidatedBeforeColumn = postgres.TimestampzColumn("invalidated_before")
 		CreatedAtColumn         = postgres.TimestampzColumn("created_at")
-		allColumns              = postgres.ColumnList{IDColumn, ClientIDColumn, UserIDColumn, ScopeColumn, RedirectURIColumn, RevokedColumn, InvalidatedBeforeColumn, CreatedAtColumn}
-		mutableColumns          = postgres.ColumnList{ClientIDColumn, UserIDColumn, ScopeColumn, RedirectURIColumn, RevokedColumn, InvalidatedBeforeColumn, CreatedAtColumn}
-		defaultColumns          = postgres.ColumnList{RevokedColumn, CreatedAtColumn}
+		allColumns              = postgres.ColumnList{IDColumn, ClientIDColumn, UserIDColumn, ScopeColumn, RedirectURIColumn, RevokedAtColumn, InvalidatedBeforeColumn, CreatedAtColumn}
+		mutableColumns          = postgres.ColumnList{ClientIDColumn, UserIDColumn, ScopeColumn, RedirectURIColumn, RevokedAtColumn, InvalidatedBeforeColumn, CreatedAtColumn}
+		defaultColumns          = postgres.ColumnList{CreatedAtColumn}
 	)
 
 	return oAuthTokenChainsTable{
@@ -88,7 +88,7 @@ func newOAuthTokenChainsTableImpl(schemaName, tableName, alias string) oAuthToke
 		UserID:            UserIDColumn,
 		Scope:             ScopeColumn,
 		RedirectURI:       RedirectURIColumn,
-		Revoked:           RevokedColumn,
+		RevokedAt:         RevokedAtColumn,
 		InvalidatedBefore: InvalidatedBeforeColumn,
 		CreatedAt:         CreatedAtColumn,
 

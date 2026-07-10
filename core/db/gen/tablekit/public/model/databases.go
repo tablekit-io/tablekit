@@ -16,7 +16,7 @@ import (
 type Databases struct {
 	ID          uuid.UUID `sql:"primary_key"`
 	Name        string
-	Type        string
+	Type        DatabaseType
 	IdentityKey string
 	Identity    dbjson.JSON[map[string]string]
 	CreatedAt   time.Time

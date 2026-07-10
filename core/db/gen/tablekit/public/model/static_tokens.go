@@ -9,8 +9,13 @@ package model
 
 import (
 	"github.com/google/uuid"
+	"time"
 )
 
-type OAuthPairedClients struct {
-	ClientID uuid.UUID `sql:"primary_key"`
+type StaticTokens struct {
+	ID        uuid.UUID `sql:"primary_key"`
+	ClientID  uuid.UUID
+	RevokedAt *time.Time
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }

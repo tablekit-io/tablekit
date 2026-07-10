@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"os"
 	"testing"
+	"time"
 
 	"core/db/dbtest"
 	"core/services/databases"
 	"core/services/queries"
+	"core/services/store"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -22,15 +24,30 @@ func TestMain(m *testing.M) {
 }
 
 // newRepository opens a fresh migrated Postgres database and returns a queries
-// repository plus a database_id that satisfies the mcp_queries FK. The database
-// is dropped when the test ends.
-func newRepository(t *testing.T) (queries.QueryRepository, uuid.UUID) {
+// repository plus a database_id and client_id that satisfy the queries FKs. The
+// database is dropped when the test ends.
+func newRepository(t *testing.T) (repo queries.QueryRepository, databaseID, clientID uuid.UUID) {
 	t.Helper()
 	database := dbtest.New(t)
-	return queries.New(database), seedDatabase(t, database, "cafe")
+	return queries.New(database), seedDatabase(t, database, "cafe"), seedClient(t, database)
 }
 
-// seedDatabase inserts a databases row (mcp_queries.database_id references it) and
+// seedClient inserts a client row (queries.client_id references it) and returns
+// its id.
+func seedClient(t *testing.T, database *sql.DB) uuid.UUID {
+	t.Helper()
+	id, err := uuid.NewV7()
+	require.NoError(t, err)
+	require.NoError(t, store.NewClientRepository(database).SaveClient(context.Background(), &store.Client{
+		ClientID:     id,
+		Type:         store.ClientTypeStatic,
+		RedirectURIs: []string{},
+		CreatedAt:    time.Now(),
+	}))
+	return id
+}
+
+// seedDatabase inserts a databases row (queries.database_id references it) and
 // returns its id.
 func seedDatabase(t *testing.T, database *sql.DB, name string) uuid.UUID {
 	t.Helper()
@@ -47,10 +64,10 @@ func seedDatabase(t *testing.T, database *sql.DB, name string) uuid.UUID {
 }
 
 func TestSaveThenGet(t *testing.T) {
-	repository, databaseID := newRepository(t)
+	repository, databaseID, clientID := newRepository(t)
 	ctx := context.Background()
 
-	key, err := repository.Save(ctx, databaseID, "SELECT 1", "a trivial probe")
+	key, err := repository.Save(ctx, databaseID, clientID, "SELECT 1", "a trivial probe")
 	require.NoError(t, err)
 	require.NotEmpty(t, key)
 
@@ -65,7 +82,7 @@ func TestSaveThenGet(t *testing.T) {
 }
 
 func TestGetUnknownKeyReturnsNilNil(t *testing.T) {
-	repository, _ := newRepository(t)
+	repository, _, _ := newRepository(t)
 
 	got, err := repository.Get(context.Background(), uuid.New())
 	require.NoError(t, err)
@@ -73,12 +90,12 @@ func TestGetUnknownKeyReturnsNilNil(t *testing.T) {
 }
 
 func TestSaveGeneratesDistinctKeys(t *testing.T) {
-	repository, databaseID := newRepository(t)
+	repository, databaseID, clientID := newRepository(t)
 	ctx := context.Background()
 
-	first, err := repository.Save(ctx, databaseID, "SELECT 1", "one")
+	first, err := repository.Save(ctx, databaseID, clientID, "SELECT 1", "one")
 	require.NoError(t, err)
-	second, err := repository.Save(ctx, databaseID, "SELECT 1", "two")
+	second, err := repository.Save(ctx, databaseID, clientID, "SELECT 1", "two")
 	require.NoError(t, err)
 
 	assert.NotEqual(t, first, second)

@@ -19,11 +19,11 @@ import (
 const (
 	audienceAccess  = "mcp"
 	audienceRefresh = "mcp-refresh"
-	// audienceBearer is the audience for CLI-minted long-lived bearer tokens. It
-	// is deliberately distinct from audienceAccess: a bearer token therefore
+	// audienceStatic is the audience for CLI-minted long-lived static tokens. It
+	// is deliberately distinct from audienceAccess: a static token therefore
 	// fails VerifyAccess, so stripping the TokenPrefix and presenting the raw JWT
 	// on the OAuth path cannot bypass the revocation check.
-	audienceBearer = "mcp-bearer"
+	audienceStatic = "mcp-static"
 	// audienceExport is the audience for short-lived signed export links handed to
 	// get_export_url. Distinct from the others so an export token is only ever
 	// honoured by the export endpoint, never on the MCP/OAuth paths.
@@ -36,14 +36,14 @@ const (
 	Scope = "mcp"
 )
 
-// TokenPrefix marks a CLI-minted bearer token. It wraps the JWT string
+// TokenPrefix marks a CLI-minted static token. It wraps the JWT string
 // (Authorization: Bearer <TokenPrefix><jwt>) so the MCP guard can branch on the
-// prefix and route the token to the bearer verifier instead of the OAuth one.
+// prefix and route the token to the static verifier instead of the OAuth one.
 const TokenPrefix = "tablekit_pat_"
 
-// bearerMonths is the validity window of a CLI-minted bearer token, in calendar
+// staticMonths is the validity window of a CLI-minted static token, in calendar
 // months.
-const bearerMonths = 6
+const staticMonths = 6
 
 // exportTTL is the validity window of a signed export link. Short: the link is
 // handed straight to the user to click, not stored.
@@ -129,14 +129,14 @@ func (i *Issuer) IssueRefresh(clientID, chainID, scope string) (token string, ia
 	return i.sign(args, audienceRefresh, time.Now().Add(i.configService.RefreshTTL))
 }
 
-// IssueBearer mints a long-lived bearer token (valid bearerMonths calendar
+// IssueStatic mints a long-lived static token (valid staticMonths calendar
 // months) carrying tokenID as its jti. The returned expiresAt matches the JWT's
-// exp exactly, so the caller can persist it on the BearerToken row. The returned
+// exp exactly, so the caller can persist it on the StaticToken row. The returned
 // token is the raw JWT; the caller prepends TokenPrefix before handing it out.
-func (i *Issuer) IssueBearer(clientID, tokenID string) (token string, expiresAt time.Time, err error) {
-	expiresAt = time.Now().AddDate(0, bearerMonths, 0)
+func (i *Issuer) IssueStatic(clientID, tokenID string) (token string, expiresAt time.Time, err error) {
+	expiresAt = time.Now().AddDate(0, staticMonths, 0)
 	args := issueArgs{clientID: clientID, scope: Scope, tokenID: tokenID}
-	token, _, err = i.sign(args, audienceBearer, expiresAt)
+	token, _, err = i.sign(args, audienceStatic, expiresAt)
 	return token, expiresAt, err
 }
 
@@ -177,11 +177,11 @@ func (i *Issuer) VerifyRefresh(token string) (*Claims, error) {
 	return i.verify(token, audienceRefresh)
 }
 
-// VerifyBearer validates a long-lived bearer token (signature, issuer, audience,
+// VerifyStatic validates a long-lived static token (signature, issuer, audience,
 // expiry) and returns its claims. The caller still has to check revocation via
 // the token id (claims.ID) in the store.
-func (i *Issuer) VerifyBearer(token string) (*Claims, error) {
-	return i.verify(token, audienceBearer)
+func (i *Issuer) VerifyStatic(token string) (*Claims, error) {
+	return i.verify(token, audienceStatic)
 }
 
 // VerifyExport validates a signed export token (signature, issuer, audience,
@@ -190,11 +190,11 @@ func (i *Issuer) VerifyExport(token string) (*Claims, error) {
 	return i.verify(token, audienceExport)
 }
 
-// BearerTokenID extracts the jti from a bearer JWT WITHOUT verifying its
+// StaticTokenID extracts the jti from a static token JWT WITHOUT verifying its
 // signature or expiry, so `token:revoke` can resolve an id from a token even if
 // it has expired. The id is only used to look up our own row, so trusting it is
 // safe — revoking a forged id simply revokes nothing.
-func BearerTokenID(token string) (string, error) {
+func StaticTokenID(token string) (string, error) {
 	claims := &Claims{}
 	parser := jwt.NewParser()
 	if _, _, err := parser.ParseUnverified(token, claims); err != nil {

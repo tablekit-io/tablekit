@@ -19,7 +19,7 @@ func TestClients(t *testing.T) {
 	assert.Nil(t, got)
 
 	clientID := uuid.New()
-	c := &Client{ClientID: clientID, RedirectURIs: []string{"http://x/cb"}, CreatedAt: time.Now()}
+	c := &Client{ClientID: clientID, RedirectURIs: []string{"http://x/cb"}, Type: ClientTypeOAuth, CreatedAt: time.Now()}
 	require.NoError(t, clients.SaveClient(ctx, c))
 
 	got, err = clients.GetClient(ctx, clientID)
@@ -28,25 +28,25 @@ func TestClients(t *testing.T) {
 	assert.Equal(t, []string{"http://x/cb"}, got.RedirectURIs)
 }
 
-// TestBearerClient round-trips a bearer client (nil name, empty redirect URIs,
-// type "bearer") and confirms it survives a fresh repository over the same
+// TestStaticClient round-trips a static client (nil name, empty redirect URIs,
+// type "static") and confirms it survives a fresh repository over the same
 // database (state persists in Postgres, standing in for a process restart).
-func TestBearerClient(t *testing.T) {
+func TestStaticClient(t *testing.T) {
 	database := newDB(t)
 	clients := NewClientRepository(database)
 	ctx := context.Background()
 
-	bearerID := uuid.New()
+	staticID := uuid.New()
 	require.NoError(t, clients.SaveClient(ctx, &Client{
-		ClientID: bearerID, ClientName: nil, RedirectURIs: []string{},
-		Type: "bearer", CreatedAt: time.Now(),
+		ClientID: staticID, ClientName: nil, RedirectURIs: []string{},
+		Type: ClientTypeStatic, CreatedAt: time.Now(),
 	}))
 
 	reopened := NewClientRepository(database)
-	got, err := reopened.GetClient(ctx, bearerID)
+	got, err := reopened.GetClient(ctx, staticID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Nil(t, got.ClientName)
-	assert.Equal(t, "bearer", got.Type)
+	assert.Equal(t, ClientTypeStatic, got.Type)
 	assert.Empty(t, got.RedirectURIs)
 }

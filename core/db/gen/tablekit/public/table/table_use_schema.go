@@ -10,13 +10,13 @@ package table
 // UseSchema sets a new schema name for all generated table SQL builder types. It is recommended to invoke
 // this method only once at the beginning of the program.
 func UseSchema(schema string) {
+	Clients = Clients.FromSchema(schema)
 	Config = Config.FromSchema(schema)
 	Databases = Databases.FromSchema(schema)
 	GooseDbVersion = GooseDbVersion.FromSchema(schema)
-	McpQueries = McpQueries.FromSchema(schema)
+	McpRequests = McpRequests.FromSchema(schema)
 	OAuthAuthCodes = OAuthAuthCodes.FromSchema(schema)
-	OAuthBearerTokens = OAuthBearerTokens.FromSchema(schema)
-	OAuthClients = OAuthClients.FromSchema(schema)
-	OAuthPairedClients = OAuthPairedClients.FromSchema(schema)
 	OAuthTokenChains = OAuthTokenChains.FromSchema(schema)
+	Queries = Queries.FromSchema(schema)
+	StaticTokens = StaticTokens.FromSchema(schema)
 }

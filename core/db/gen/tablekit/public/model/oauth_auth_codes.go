@@ -13,7 +13,8 @@ import (
 )
 
 type OAuthAuthCodes struct {
-	Code          uuid.UUID `sql:"primary_key"`
+	ID            uuid.UUID `sql:"primary_key"`
+	Code          string
 	ClientID      uuid.UUID
 	RedirectURI   string
 	CodeChallenge string

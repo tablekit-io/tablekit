@@ -20,10 +20,10 @@ import (
 func MCPRoute(appServices *services.Services) http.Handler {
 	issuer := appServices.Issuer
 	verifier := func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-		// A CLI-minted bearer token is marked by TokenPrefix: validate it as a
-		// bearer JWT and reject it if its store row is missing or revoked.
+		// A CLI-minted static token is marked by TokenPrefix: validate it as a
+		// static JWT and reject it if its store row is missing or revoked.
 		if rawJWT, ok := strings.CutPrefix(token, oauth.TokenPrefix); ok {
-			claims, err := issuer.VerifyBearer(rawJWT)
+			claims, err := issuer.VerifyStatic(rawJWT)
 			if err != nil {
 				return nil, auth.ErrInvalidToken
 			}
@@ -31,14 +31,17 @@ func MCPRoute(appServices *services.Services) http.Handler {
 			if err != nil {
 				return nil, auth.ErrInvalidToken
 			}
-			bearerToken, err := appServices.BearerTokens.GetBearerToken(ctx, tokenID)
-			if err != nil || bearerToken == nil || bearerToken.Revoked {
+			staticToken, err := appServices.StaticTokens.GetStaticToken(ctx, tokenID)
+			if err != nil || staticToken == nil || staticToken.Revoked() {
 				return nil, auth.ErrInvalidToken
 			}
 			return &auth.TokenInfo{
 				UserID:     oauth.UserID,
 				Scopes:     []string{claims.Scope},
 				Expiration: claims.ExpiresAt.Time,
+				// Carry the client id (claims.cid) so the MCP request audit log can
+				// attribute each request to the client its token was issued to.
+				Extra: map[string]any{"client_id": claims.CID},
 			}, nil
 		}
 
@@ -50,6 +53,7 @@ func MCPRoute(appServices *services.Services) http.Handler {
 			UserID:     oauth.UserID,
 			Scopes:     []string{claims.Scope},
 			Expiration: claims.ExpiresAt.Time,
+			Extra:      map[string]any{"client_id": claims.CID},
 		}, nil
 	}
 

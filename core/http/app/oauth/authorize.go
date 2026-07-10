@@ -98,7 +98,9 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		return
 	}
 	if err := h.appServices.AuthCodes.PutCode(c.Request.Context(), &store.AuthCode{
-		Code:          code,
+		// id is the PK; code is the value handed to the client. Same value today.
+		ID:            code,
+		Code:          code.String(),
 		ClientID:      clientID,
 		RedirectURI:   redirectURI,
 		CodeChallenge: codeChallenge,

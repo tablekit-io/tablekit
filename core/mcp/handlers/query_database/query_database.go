@@ -57,9 +57,15 @@ func Register(s *mcp.Server, deps shared.Deps) {
 // show_pie_donut_sunburst_chart / get_export_url. It persists nothing but the query
 // text (not the rows): the other tools re-run the stored SQL against the live database.
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
-	return func(ctx context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in input) (*mcp.CallToolResult, output, error) {
 		if in.Description == "" {
 			return nil, output{}, fmt.Errorf("description is required")
+		}
+
+		// Attribute the stored query to the calling client (queries.client_id).
+		clientID, err := shared.ClientID(req)
+		if err != nil {
+			return nil, output{}, err
 		}
 
 		// Pin the physical database on first query: derive its stable identity and
@@ -74,7 +80,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			return nil, output{}, err
 		}
 
-		key, err := deps.Queries.Save(ctx, databaseID, in.SQL, in.Description)
+		key, err := deps.Queries.Save(ctx, databaseID, clientID, in.SQL, in.Description)
 		if err != nil {
 			return nil, output{}, err
 		}

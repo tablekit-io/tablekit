@@ -53,7 +53,7 @@ func main() {
 							UseField(func(column metadata.Column) template.TableModelField {
 								field := template.DefaultTableModelField(column)
 								switch {
-								case table.Name == "oauth_clients" && column.Name == "redirect_uris":
+								case table.Name == "clients" && column.Name == "redirect_uris":
 									field.Type = template.NewType(dbjson.JSON[[]string]{})
 								case table.Name == "config" && column.Name == "value":
 									field.Type = template.NewType(json.RawMessage{})

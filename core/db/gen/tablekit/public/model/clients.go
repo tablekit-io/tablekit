@@ -13,10 +13,11 @@ import (
 	"time"
 )
 
-type OAuthClients struct {
-	ClientID     uuid.UUID `sql:"primary_key"`
+type Clients struct {
+	ID           uuid.UUID `sql:"primary_key"`
 	ClientName   *string
-	Type         string
+	Type         ClientType
 	RedirectUris dbjson.JSON[[]string]
 	CreatedAt    time.Time
+	PairedAt     *time.Time
 }

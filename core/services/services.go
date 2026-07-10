@@ -14,6 +14,7 @@ import (
 	"core/services/databases"
 	"core/services/oauth"
 	"core/services/queries"
+	"core/services/requests"
 	"core/services/store"
 )
 
@@ -24,12 +25,13 @@ type Services struct {
 	Clients      store.ClientRepository
 	AuthCodes    store.AuthCodeRepository
 	TokenChains  store.TokenChainRepository
-	BearerTokens store.BearerTokenRepository
+	StaticTokens store.StaticTokenRepository
 	Pairing      store.PairingRepository
 	Engine       *engine.Service
 	Issuer       *oauth.Issuer
 	DB           *sql.DB
 	Queries      queries.QueryRepository
+	Requests     requests.RequestLog
 	Databases    *databases.Resolver
 }
 
@@ -68,12 +70,13 @@ func New() (*Services, error) {
 		Clients:      store.NewClientRepository(database),
 		AuthCodes:    store.NewAuthCodeRepository(database),
 		TokenChains:  store.NewTokenChainRepository(database),
-		BearerTokens: store.NewBearerTokenRepository(database),
+		StaticTokens: store.NewStaticTokenRepository(database),
 		Pairing:      store.NewPairingRepository(database),
 		Engine:       engineService,
 		Issuer:       issuer,
 		DB:           database,
 		Queries:      queries.New(database),
+		Requests:     requests.New(database),
 		Databases:    databases.NewResolver(engineService, databases.NewRepository(database)),
 	}, nil
 }

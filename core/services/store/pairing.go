@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"core/db/gen/tablekit/public/model"
 	"core/db/gen/tablekit/public/table"
@@ -27,9 +28,9 @@ const (
 // pairingModeKey is the config row that holds the current pairing mode.
 const pairingModeKey = "pairing_mode"
 
-// PairingRepository owns the paired-client set (oauth_paired_clients) and the
+// PairingRepository owns the paired state of clients (clients.paired_at) and the
 // key/value config that holds the pairing mode. It bundles the two because
-// TryPair reads the mode and writes both tables in one transaction.
+// TryPair reads the mode and writes both in one transaction.
 type PairingRepository interface {
 	TryPair(ctx context.Context, clientID uuid.UUID) (bool, error)
 	SetPairingMode(ctx context.Context, mode string) error
@@ -67,16 +68,21 @@ func (r *pairingRepository) TryPair(ctx context.Context, clientID uuid.UUID) (bo
 	}
 	defer tx.Rollback()
 
-	var existing model.OAuthPairedClients
-	err = SELECT(table.OAuthPairedClients.ClientID).
-		FROM(table.OAuthPairedClients).
-		WHERE(table.OAuthPairedClients.ClientID.EQ(UUID(clientID))).
+	var existing model.Clients
+	err = SELECT(table.Clients.PairedAt).
+		FROM(table.Clients).
+		WHERE(table.Clients.ID.EQ(UUID(clientID))).
 		QueryContext(ctx, tx, &existing)
-	if err == nil {
-		return true, nil // already paired
+	if errors.Is(err, qrm.ErrNoRows) {
+		// The client must be registered before it can pair (authorize looks it up
+		// first), so a missing row is unexpected rather than "not yet paired".
+		return false, fmt.Errorf("pair unknown client %q", clientID)
 	}
-	if !errors.Is(err, qrm.ErrNoRows) {
+	if err != nil {
 		return false, fmt.Errorf("check paired client: %w", err)
+	}
+	if existing.PairedAt != nil {
+		return true, nil // already paired
 	}
 
 	mode, err := pairingMode(ctx, tx)
@@ -120,17 +126,18 @@ func (r *pairingRepository) PairingStatus(ctx context.Context) (mode string, pai
 	if err != nil {
 		return "", nil, err
 	}
-	var rows []model.OAuthPairedClients
-	err = SELECT(table.OAuthPairedClients.ClientID).
-		FROM(table.OAuthPairedClients).
-		ORDER_BY(table.OAuthPairedClients.ClientID.ASC()).
+	var rows []model.Clients
+	err = SELECT(table.Clients.ID).
+		FROM(table.Clients).
+		WHERE(table.Clients.PairedAt.IS_NOT_NULL()).
+		ORDER_BY(table.Clients.ID.ASC()).
 		QueryContext(ctx, r.database, &rows)
 	if err != nil {
 		return "", nil, fmt.Errorf("list paired clients: %w", err)
 	}
 	paired = make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
-		paired = append(paired, row.ClientID)
+		paired = append(paired, row.ID)
 	}
 	return mode, paired, nil
 }
@@ -195,13 +202,13 @@ func setPairingMode(ctx context.Context, q qrm.Executable, mode string) error {
 	return setConfig(ctx, q, pairingModeKey, mode)
 }
 
-// pairClient adds clientID to the paired set (idempotent).
+// pairClient marks clientID paired by stamping clients.paired_at with the current
+// time. Callers only reach here for a client that is not yet paired.
 func pairClient(ctx context.Context, q qrm.Executable, clientID uuid.UUID) error {
-	stmt := table.OAuthPairedClients.
-		INSERT(table.OAuthPairedClients.ClientID).
-		VALUES(UUID(clientID)).
-		ON_CONFLICT(table.OAuthPairedClients.ClientID).
-		DO_NOTHING()
+	stmt := table.Clients.
+		UPDATE(table.Clients.PairedAt).
+		SET(TimestampzT(time.Now())).
+		WHERE(table.Clients.ID.EQ(UUID(clientID)))
 	if _, err := stmt.ExecContext(ctx, q); err != nil {
 		return fmt.Errorf("pair client: %w", err)
 	}

@@ -11,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMintBearer(t *testing.T) {
+func TestMintStatic(t *testing.T) {
 	database := openTestDB(t)
 	clients := store.NewClientRepository(database)
-	tokens := store.NewBearerTokenRepository(database)
+	tokens := store.NewStaticTokenRepository(database)
 	issuer := newIssuer(t, testConfig())
 	ctx := context.Background()
 
-	minted, err := MintBearer(ctx, clients, tokens, issuer)
+	minted, err := MintStatic(ctx, clients, tokens, issuer)
 	require.NoError(t, err)
 
 	// The handed-out token is prefixed and carries the returned id/expiry.
@@ -27,15 +27,15 @@ func TestMintBearer(t *testing.T) {
 	assert.False(t, minted.ExpiresAt.IsZero())
 
 	// The token row is persisted, retrievable by id, and not revoked.
-	row, err := tokens.GetBearerToken(ctx, minted.ID)
+	row, err := tokens.GetStaticToken(ctx, minted.ID)
 	require.NoError(t, err)
 	require.NotNil(t, row)
-	assert.False(t, row.Revoked)
+	assert.False(t, row.Revoked())
 	assert.Equal(t, minted.ID, row.ID)
 
 	// The raw JWT (prefix stripped) verifies as a bearer token with that jti.
 	rawJWT := strings.TrimPrefix(minted.Token, TokenPrefix)
-	claims, err := issuer.VerifyBearer(rawJWT)
+	claims, err := issuer.VerifyStatic(rawJWT)
 	require.NoError(t, err)
 	assert.Equal(t, minted.ID.String(), claims.ID)
 }

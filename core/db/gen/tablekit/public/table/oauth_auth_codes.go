@@ -17,6 +17,7 @@ type oAuthAuthCodesTable struct {
 	postgres.Table
 
 	// Columns
+	ID            postgres.ColumnString
 	Code          postgres.ColumnString
 	ClientID      postgres.ColumnString
 	RedirectURI   postgres.ColumnString
@@ -65,6 +66,7 @@ func newOAuthAuthCodesTable(schemaName, tableName, alias string) *OAuthAuthCodes
 
 func newOAuthAuthCodesTableImpl(schemaName, tableName, alias string) oAuthAuthCodesTable {
 	var (
+		IDColumn            = postgres.StringColumn("id")
 		CodeColumn          = postgres.StringColumn("code")
 		ClientIDColumn      = postgres.StringColumn("client_id")
 		RedirectURIColumn   = postgres.StringColumn("redirect_uri")
@@ -72,8 +74,8 @@ func newOAuthAuthCodesTableImpl(schemaName, tableName, alias string) oAuthAuthCo
 		ScopeColumn         = postgres.StringColumn("scope")
 		UserIDColumn        = postgres.StringColumn("user_id")
 		ExpiresAtColumn     = postgres.TimestampzColumn("expires_at")
-		allColumns          = postgres.ColumnList{CodeColumn, ClientIDColumn, RedirectURIColumn, CodeChallengeColumn, ScopeColumn, UserIDColumn, ExpiresAtColumn}
-		mutableColumns      = postgres.ColumnList{ClientIDColumn, RedirectURIColumn, CodeChallengeColumn, ScopeColumn, UserIDColumn, ExpiresAtColumn}
+		allColumns          = postgres.ColumnList{IDColumn, CodeColumn, ClientIDColumn, RedirectURIColumn, CodeChallengeColumn, ScopeColumn, UserIDColumn, ExpiresAtColumn}
+		mutableColumns      = postgres.ColumnList{CodeColumn, ClientIDColumn, RedirectURIColumn, CodeChallengeColumn, ScopeColumn, UserIDColumn, ExpiresAtColumn}
 		defaultColumns      = postgres.ColumnList{}
 	)
 
@@ -81,6 +83,7 @@ func newOAuthAuthCodesTableImpl(schemaName, tableName, alias string) oAuthAuthCo
 		Table: postgres.NewTable(schemaName, tableName, alias, allColumns...),
 
 		//Columns
+		ID:            IDColumn,
 		Code:          CodeColumn,
 		ClientID:      ClientIDColumn,
 		RedirectURI:   RedirectURIColumn,

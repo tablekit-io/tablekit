@@ -45,6 +45,7 @@ func (h *Handlers) HandleRegister(c *gin.Context) {
 		ClientID:     clientID,
 		ClientName:   clientName,
 		RedirectURIs: request.RedirectURIs,
+		Type:         store.ClientTypeOAuth,
 		CreatedAt:    time.Now(),
 	}
 	if err := h.appServices.Clients.SaveClient(c.Request.Context(), client); err != nil {

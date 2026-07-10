@@ -27,8 +27,8 @@ func TestMigrateBringsSchemaUp(t *testing.T) {
 	require.NoError(t, db.Migrate(database))
 
 	for _, table := range []string{
-		"mcp_queries", "oauth_clients", "oauth_auth_codes", "oauth_token_chains",
-		"oauth_bearer_tokens", "oauth_paired_clients", "config",
+		"queries", "mcp_requests", "clients", "oauth_auth_codes", "oauth_token_chains",
+		"static_tokens", "databases", "config",
 	} {
 		var count int
 		err := database.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count)

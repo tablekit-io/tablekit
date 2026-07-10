@@ -93,16 +93,16 @@ func TestAudienceSeparation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBearerTokenRoundTrip(t *testing.T) {
+func TestStaticTokenRoundTrip(t *testing.T) {
 	issuer := newIssuer(t, testConfig())
 
-	token, expiresAt, err := issuer.IssueBearer("client-1", "tok-1")
+	token, expiresAt, err := issuer.IssueStatic("client-1", "tok-1")
 	require.NoError(t, err)
 
 	// Valid roughly 6 calendar months out.
 	assert.WithinDuration(t, time.Now().AddDate(0, 6, 0), expiresAt, time.Minute)
 
-	claims, err := issuer.VerifyBearer(token)
+	claims, err := issuer.VerifyStatic(token)
 	require.NoError(t, err)
 	assert.Equal(t, "client-1", claims.CID)
 	assert.Equal(t, "tok-1", claims.ID)
@@ -112,10 +112,10 @@ func TestBearerTokenRoundTrip(t *testing.T) {
 	assert.WithinDuration(t, expiresAt, claims.ExpiresAt.Time, time.Millisecond)
 }
 
-func TestBearerAudienceSeparation(t *testing.T) {
+func TestStaticAudienceSeparation(t *testing.T) {
 	issuer := newIssuer(t, testConfig())
 
-	bearer, _, err := issuer.IssueBearer("c", "t")
+	bearer, _, err := issuer.IssueStatic("c", "t")
 	require.NoError(t, err)
 	access, err := issuer.IssueAccess("c", "ch", "mcp")
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestBearerAudienceSeparation(t *testing.T) {
 	// access token must not pass as a bearer token.
 	_, err = issuer.VerifyAccess(bearer)
 	assert.Error(t, err)
-	_, err = issuer.VerifyBearer(access)
+	_, err = issuer.VerifyStatic(access)
 	assert.Error(t, err)
 }
 
@@ -156,18 +156,18 @@ func TestExportAudienceSeparation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBearerTokenID(t *testing.T) {
+func TestStaticTokenID(t *testing.T) {
 	issuer := newIssuer(t, testConfig())
 
-	token, _, err := issuer.IssueBearer("c", "tok-42")
+	token, _, err := issuer.IssueStatic("c", "tok-42")
 	require.NoError(t, err)
 
 	// jti is readable without verification (used by token:revoke).
-	id, err := BearerTokenID(token)
+	id, err := StaticTokenID(token)
 	require.NoError(t, err)
 	assert.Equal(t, "tok-42", id)
 
-	_, err = BearerTokenID("not.a.jwt")
+	_, err = StaticTokenID("not.a.jwt")
 	assert.Error(t, err)
 }
 

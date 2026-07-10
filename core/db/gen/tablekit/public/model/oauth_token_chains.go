@@ -18,7 +18,7 @@ type OAuthTokenChains struct {
 	UserID            string
 	Scope             string
 	RedirectURI       string
-	Revoked           bool
+	RevokedAt         *time.Time
 	InvalidatedBefore time.Time
 	CreatedAt         time.Time
 }

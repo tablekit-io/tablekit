@@ -17,23 +17,31 @@ import (
 	. "github.com/go-jet/jet/v2/postgres"
 )
 
-// Client is a registered OAuth client (RFC 7591 dynamic registration). A CLI-
-// minted bearer token also registers a Client, with Type "bearer", a nil
-// ClientName (stored as SQL NULL) and an empty RedirectURIs.
+// Client types, matching the client_type enum. An OAuth client is a dynamic
+// registration; a static client owns a CLI-minted static token.
+const (
+	ClientTypeOAuth  = "oauth"
+	ClientTypeStatic = "static"
+)
+
+// Client is a registered client in the unified clients table. It is either an
+// OAuth client (RFC 7591 dynamic registration, Type "oauth") or a static-token
+// client (a CLI-minted static token registers its own client, Type "static" with
+// a nil ClientName and empty RedirectURIs).
 type Client struct {
 	ClientID uuid.UUID `json:"client_id"`
 	// ClientName is a pointer so an absent name is stored as NULL rather than an
-	// empty string, which is what bearer clients carry.
+	// empty string, which is what static clients carry.
 	ClientName   *string  `json:"client_name"`
 	RedirectURIs []string `json:"redirect_uris"`
-	// Type distinguishes a CLI bearer client ("bearer") from an OAuth client
-	// (empty/omitted).
-	Type      string    `json:"type,omitempty"`
+	// Type distinguishes a static-token client ("static") from an OAuth client
+	// ("oauth"). Maps to the client_type enum column.
+	Type      string    `json:"type"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ClientRepository persists registered OAuth clients (and CLI bearer clients) in
-// the oauth_clients table.
+// ClientRepository persists registered clients (both OAuth and static-token
+// clients) in the clients table.
 type ClientRepository interface {
 	SaveClient(ctx context.Context, c *Client) error
 	GetClient(ctx context.Context, id uuid.UUID) (*Client, error)
@@ -51,12 +59,12 @@ func NewClientRepository(database *sql.DB) ClientRepository {
 // SaveClient persists a newly registered client. redirect_uris is stored as a
 // jsonb array (read/written whole via the typed dbjson.JSON wrapper).
 func (r *clientRepository) SaveClient(ctx context.Context, c *Client) error {
-	stmt := table.OAuthClients.
-		INSERT(table.OAuthClients.AllColumns).
-		MODEL(model.OAuthClients{
-			ClientID:     c.ClientID,
+	stmt := table.Clients.
+		INSERT(table.Clients.AllColumns).
+		MODEL(model.Clients{
+			ID:           c.ClientID,
 			ClientName:   c.ClientName,
-			Type:         c.Type,
+			Type:         model.ClientType(c.Type),
 			RedirectUris: dbjson.JSON[[]string]{Val: c.RedirectURIs},
 			CreatedAt:    c.CreatedAt,
 		})
@@ -68,11 +76,11 @@ func (r *clientRepository) SaveClient(ctx context.Context, c *Client) error {
 
 // GetClient returns the client by id, or nil if unknown.
 func (r *clientRepository) GetClient(ctx context.Context, id uuid.UUID) (*Client, error) {
-	stmt := SELECT(table.OAuthClients.AllColumns).
-		FROM(table.OAuthClients).
-		WHERE(table.OAuthClients.ClientID.EQ(UUID(id)))
+	stmt := SELECT(table.Clients.AllColumns).
+		FROM(table.Clients).
+		WHERE(table.Clients.ID.EQ(UUID(id)))
 
-	var row model.OAuthClients
+	var row model.Clients
 	err := stmt.QueryContext(ctx, r.database, &row)
 	if errors.Is(err, qrm.ErrNoRows) {
 		return nil, nil
@@ -81,10 +89,10 @@ func (r *clientRepository) GetClient(ctx context.Context, id uuid.UUID) (*Client
 		return nil, fmt.Errorf("get client %q: %w", id, err)
 	}
 	return &Client{
-		ClientID:     row.ClientID,
+		ClientID:     row.ID,
 		ClientName:   row.ClientName,
 		RedirectURIs: row.RedirectUris.Val,
-		Type:         row.Type,
+		Type:         string(row.Type),
 		CreatedAt:    row.CreatedAt,
 	}, nil
 }

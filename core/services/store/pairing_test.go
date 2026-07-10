@@ -15,15 +15,16 @@ func TestPairingModes(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("once admits one then locks", func(t *testing.T) {
-		pairing := NewPairingRepository(newDB(t))
+		database := newDB(t)
+		pairing := NewPairingRepository(database)
 		// Fresh state defaults to "once".
 		mode, paired, err := pairing.PairingStatus(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, PairingOnce, mode)
 		assert.Empty(t, paired)
 
-		clientA := uuid.New()
-		clientB := uuid.New()
+		clientA := seedClient(t, database)
+		clientB := seedClient(t, database)
 		ok, err := pairing.TryPair(ctx, clientA)
 		require.NoError(t, err)
 		assert.True(t, ok)
@@ -45,9 +46,10 @@ func TestPairingModes(t *testing.T) {
 	})
 
 	t.Run("indefinite admits many", func(t *testing.T) {
-		pairing := NewPairingRepository(newDB(t))
+		database := newDB(t)
+		pairing := NewPairingRepository(database)
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingIndefinite))
-		ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+		ids := []uuid.UUID{seedClient(t, database), seedClient(t, database), seedClient(t, database)}
 		for _, id := range ids {
 			ok, err := pairing.TryPair(ctx, id)
 			require.NoError(t, err)
@@ -60,14 +62,16 @@ func TestPairingModes(t *testing.T) {
 	})
 
 	t.Run("disabled rejects new but allows paired", func(t *testing.T) {
-		pairing := NewPairingRepository(newDB(t))
+		database := newDB(t)
+		pairing := NewPairingRepository(database)
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingIndefinite))
-		known := uuid.New()
+		known := seedClient(t, database)
 		_, err := pairing.TryPair(ctx, known)
 		require.NoError(t, err)
 
 		require.NoError(t, pairing.SetPairingMode(ctx, PairingDisabled))
-		ok, err := pairing.TryPair(ctx, uuid.New())
+		newClient := seedClient(t, database)
+		ok, err := pairing.TryPair(ctx, newClient)
 		require.NoError(t, err)
 		assert.False(t, ok)
 
@@ -86,17 +90,23 @@ func TestPairingModes(t *testing.T) {
 // goroutines racing to pair distinct clients must yield exactly one winner.
 // Run with `go test -race`.
 func TestTryPairConcurrent(t *testing.T) {
-	pairing := NewPairingRepository(newDB(t)) // defaults to once
+	database := newDB(t)
+	pairing := NewPairingRepository(database) // defaults to once
 	ctx := context.Background()
 
 	const n = 32
+	ids := make([]uuid.UUID, n)
+	for i := range ids {
+		ids[i] = seedClient(t, database)
+	}
+
 	var wins int32
 	var wg sync.WaitGroup
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			ok, err := pairing.TryPair(ctx, clientIDFor(i))
+			ok, err := pairing.TryPair(ctx, ids[i])
 			if err == nil && ok {
 				atomic.AddInt32(&wins, 1)
 			}
@@ -109,10 +119,4 @@ func TestTryPairConcurrent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, PairingDisabled, mode)
 	assert.Len(t, paired, 1)
-}
-
-// clientIDFor returns a distinct client id per goroutine index; the concurrent
-// pairing race only needs the ids to differ, and every uuid.New() does.
-func clientIDFor(int) uuid.UUID {
-	return uuid.New()
 }

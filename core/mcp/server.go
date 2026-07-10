@@ -37,6 +37,12 @@ If only one database is configured, use it without asking. Resolve relative date
 		appServices.Issuer,
 		appServices.Config.PublicBaseURL,
 	).Register(server)
+	// Audit every MCP request (after the HTTP-layer bearer-token gate) into the
+	// mcp_requests log. Best-effort: it never alters or blocks the request. Skipped
+	// when no audit log is wired (e.g. in-memory server tests without a database).
+	if appServices.Requests != nil {
+		server.AddReceivingMiddleware(loggingMiddleware(appServices.Requests))
+	}
 	return server
 }
 

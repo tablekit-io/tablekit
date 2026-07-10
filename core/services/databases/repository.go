@@ -105,7 +105,7 @@ func (r *repository) Get(ctx context.Context, id uuid.UUID) (*Record, error) {
 	return &Record{
 		ID:          row.ID,
 		Name:        row.Name,
-		Type:        row.Type,
+		Type:        string(row.Type),
 		IdentityKey: row.IdentityKey,
 		Identity:    row.Identity.Val,
 		CreatedAt:   row.CreatedAt,

@@ -12,10 +12,11 @@ import (
 	"time"
 )
 
-type McpQueries struct {
+type Queries struct {
 	ID          uuid.UUID `sql:"primary_key"`
 	SQL         string
 	Description string
-	CreatedAt   time.Time
 	DatabaseID  uuid.UUID
+	ClientID    uuid.UUID
+	CreatedAt   time.Time
 }

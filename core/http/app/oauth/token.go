@@ -57,12 +57,7 @@ func (h *Handlers) authCodeGrant(c *gin.Context, client *store.Client) {
 		return
 	}
 
-	code, err := uuid.Parse(rawCode)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown or used code")
-		return
-	}
-	authCode, err := h.appServices.AuthCodes.ConsumeCode(c.Request.Context(), code)
+	authCode, err := h.appServices.AuthCodes.ConsumeCode(c.Request.Context(), rawCode)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "server_error", "could not read code")
 		return
@@ -144,7 +139,7 @@ func (h *Handlers) refreshGrant(c *gin.Context, client *store.Client) {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "unknown chain")
 		return
 	}
-	if chain.Revoked {
+	if chain.Revoked() {
 		sendError(c, http.StatusBadRequest, "invalid_grant", "chain revoked")
 		return
 	}
