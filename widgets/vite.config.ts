@@ -94,6 +94,12 @@ const singlefileManifest = (
 
 export default defineConfig({
     root: ROOT,
+    // __WIDGET_DEV__ is true only for the watch (dev) build, so widget code can
+    // gate dev-only behaviour (verbose console logging) and have it dead-code
+    // eliminated from production builds. Set by build.mjs.
+    define: {
+        __WIDGET_DEV__: JSON.stringify(process.env.WIDGET_DEV === 'true'),
+    },
     plugins: [
         tailwindcss(),
         react(),

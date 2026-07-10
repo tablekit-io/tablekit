@@ -24,6 +24,11 @@ const ENTRIES = ['chart_renderer'];
 
 const watch = process.argv.includes('--watch');
 
+// The watch build IS the dev flow (`bun run dev`); a one-shot build is a
+// production artifact. Surface that to vite.config.ts so it can compile in (or
+// out) the widget's verbose console logging via the __WIDGET_DEV__ define.
+process.env.WIDGET_DEV = watch ? 'true' : 'false';
+
 // Clean dist's contents once (not the dir itself: on macOS the provenance xattr
 // can block removing a directory created by a sandboxed tool, though removing
 // its entries is allowed). Per-template builds then append and merge the manifest.

@@ -21,9 +21,13 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {App} from '@modelcontextprotocol/ext-apps';
 
 const TAG = '[tablekit-widget]';
-// Verbose instrumentation switch. Kept on for the dev/diagnostic build so the
-// host's console shows the full handshake; flip to false to silence.
-const DEBUG = true;
+// Injected by vite (see vite.config.ts): true for the dev/watch build, false for
+// production. Declared here so tsc is happy; replaced with a literal at build so
+// the logging is dead-code-eliminated from production bundles.
+declare const __WIDGET_DEV__: boolean;
+// Verbose instrumentation switch. On in dev so the host's console shows the full
+// handshake; compiled out of production builds.
+const DEBUG = __WIDGET_DEV__;
 const log = (...args: unknown[]): void => {
     if (DEBUG) {
         console.debug(TAG, ...args);
