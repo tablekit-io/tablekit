@@ -1,0 +1,4 @@
+{% autoescape off %}{{ databases|length }} database(s) configured.
+{% for db in databases %}- {{ db.name }} ({{ db.type }})
+{% endfor %}{% for hint in hints_for_ai_agents %}
+{{ hint }}{% endfor %}{% endautoescape %}

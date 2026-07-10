@@ -4,7 +4,6 @@ package listavailabledatabases
 import (
 	"context"
 	_ "embed"
-	"fmt"
 
 	"core/engine"
 	"core/helpers"
@@ -15,6 +14,13 @@ import (
 
 //go:embed schema.json
 var schemaJSON []byte
+
+//go:embed output.tmpl
+var outputTmpl []byte
+
+// textTemplate renders the canonical structured output into the text content
+// block. Compiled once at init; a malformed template panics at startup.
+var textTemplate = shared.MustTemplate(outputTmpl)
 
 // input is empty: the tool takes no arguments.
 type input struct{}
@@ -45,11 +51,13 @@ func Register(s *mcp.Server, deps shared.Deps) {
 // hosts, credentials or any connection detail.
 func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 	return func(_ context.Context, _ *mcp.CallToolRequest, _ input) (*mcp.CallToolResult, output, error) {
-		databases := deps.Engine.List()
+		out := output{Databases: deps.Engine.List()}
+		text, err := shared.RenderText(textTemplate, out)
+		if err != nil {
+			return nil, out, err
+		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("%d database(s) configured.", len(databases)),
-			}},
-		}, output{Databases: databases}, nil
+			Content: []mcp.Content{&mcp.TextContent{Text: text}},
+		}, out, nil
 	}
 }

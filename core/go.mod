@@ -3,6 +3,7 @@ module core
 go 1.25.7
 
 require (
+	github.com/flosch/pongo2/v7 v7.0.0-alpha.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-jet/jet/v2 v2.15.0

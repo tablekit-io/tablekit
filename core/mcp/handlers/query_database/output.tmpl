@@ -1,0 +1,5 @@
+{% autoescape off %}Stored query {{ result_key }} against "{{ database }}": {{ row_count }} row(s) in the first page{% if has_more %} (more rows available){% endif %}. Pass result_key to read_results (to paginate over the result set), show_bar_line_area_chart / show_pie_donut_sunburst_chart to display charts for the user.
+{% if rows %}
+{{ rows|mdtable:columns }}
+{% endif %}{% for hint in hints_for_ai_agents %}
+{{ hint }}{% endfor %}{% endautoescape %}

@@ -16,6 +16,13 @@ import (
 //go:embed schema.json
 var schemaJSON []byte
 
+//go:embed output.tmpl
+var outputTmpl []byte
+
+// textTemplate renders the canonical structured output into the text content
+// block. Compiled once at init; a malformed template panics at startup.
+var textTemplate = shared.MustTemplate(outputTmpl)
+
 // input is the query_database tool's argument schema. Descriptions live in
 // schema.json; the struct only decodes.
 type input struct {
@@ -28,6 +35,7 @@ type input struct {
 // output is query_database's structured result: stats plus the result_key the
 // other tools take. Rows are inlined only when include_results was set.
 type output struct {
+	Database         string              `json:"database" jsonschema:"the database the query ran against"`
 	ResultKey        string              `json:"result_key" jsonschema:"the key identifying this stored query; pass it to read_results, show_bar_line_area_chart or show_pie_donut_sunburst_chart"`
 	RowCount         int                 `json:"row_count" jsonschema:"number of rows in this first page (at most default_limit)"`
 	HasMore          bool                `json:"has_more" jsonschema:"true when more rows exist beyond this first page"`
@@ -92,27 +100,26 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		}
 
 		out := output{
+			Database:     in.Database,
 			ResultKey:    key.String(),
 			RowCount:     result.RowCount,
 			HasMore:      hasMore,
 			DefaultLimit: shared.DefaultLimit,
 			Columns:      shared.ToColumnInfos(result.Columns),
 		}
-		summary := fmt.Sprintf(
-			"Stored query %s against %q: %d row(s) in the first page%s. "+
-				"Pass result_key to read_results (to paginate over the result set), show_bar_line_area_chart / show_pie_donut_sunburst_chart to display charts for the user.",
-			key, in.Database, result.RowCount, shared.MoreSuffix(hasMore),
-		)
 		// When rows are inlined the agent has data in hand, so nudge it toward the
-		// chart tools (same as read_results).
+		// chart tools (same as read_results). The template renders the hints.
 		if in.IncludeResults {
 			out.Rows = result.Rows
 			out.HintsForAIAgents = []string{shared.ChartHint}
-			summary += " " + shared.ChartHint
 		}
 
+		text, err := shared.RenderText(textTemplate, out)
+		if err != nil {
+			return nil, out, err
+		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: summary}},
+			Content: []mcp.Content{&mcp.TextContent{Text: text}},
 		}, out, nil
 	}
 }

@@ -17,6 +17,13 @@ import (
 //go:embed schema.json
 var schemaJSON []byte
 
+//go:embed output.tmpl
+var outputTmpl []byte
+
+// textTemplate renders the canonical structured output into the text content
+// block. Compiled once at init; a malformed template panics at startup.
+var textTemplate = shared.MustTemplate(outputTmpl)
+
 // input is the read_results tool's argument schema. Descriptions live in
 // schema.json; the struct only decodes.
 type input struct {
@@ -28,6 +35,7 @@ type input struct {
 
 // output is one paginated window of a stored query's rows.
 type output struct {
+	Key              string           `json:"key" jsonschema:"the result_key identifying the stored query this window came from"`
 	Skip             int              `json:"skip" jsonschema:"the offset this window started at"`
 	Limit            int              `json:"limit" jsonschema:"the page size used for this window"`
 	Columns          []string         `json:"columns" jsonschema:"the returned column names, in order (after any subset filtering)"`
@@ -106,6 +114,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 		}
 
 		out := output{
+			Key:              in.Key,
 			Skip:             skip,
 			Limit:            limit,
 			Columns:          columns,
@@ -115,10 +124,12 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			NextSkip:         nextSkip,
 			HintsForAIAgents: []string{shared.ChartHint},
 		}
-		summary := fmt.Sprintf("Rows %d–%d of stored query %s: %d row(s)%s. %s",
-			skip, skip+len(rows), in.Key, len(rows), shared.MoreSuffix(hasMore), shared.ChartHint)
+		text, err := shared.RenderText(textTemplate, out)
+		if err != nil {
+			return nil, out, err
+		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: summary}},
+			Content: []mcp.Content{&mcp.TextContent{Text: text}},
 		}, out, nil
 	}
 }
