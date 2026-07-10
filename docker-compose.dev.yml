@@ -12,6 +12,10 @@ services:
       APP_PORT: "${APP_PORT:-8080}"
       CONTROL_PORT: "${CONTROL_PORT:-8081}"
 
+      # Verbose logging in dev so the full per-tool/debug trace is visible. The
+      # code default is info (see core/logging), which is what production uses.
+      LOG_LEVEL: "${LOG_LEVEL:-debug}"
+
       # Development marker: turns on real (materialized) foreign-key constraints in
       # the schema migration, and dev-only OAuth client self-heal at /authorize
       # (recreates a wiped client so Reconnect works without re-adding the
@@ -82,10 +86,14 @@ services:
 
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${CONTROL_PORT:-8081}/health"]
-      interval: 10s
+      # Poll infrequently in dev: a 10s interval spammed a /health request-log
+      # line every 10 seconds. start_interval keeps startup fast (checks every 5s
+      # until the first success), then it drops to one check every 10 minutes.
+      interval: 10m
       timeout: 3s
       retries: 3
-      start_period: 60s
+      start_period: 30s
+      start_interval: 5s
 
     # Wait for the app-state postgres (so migrations have somewhere to run) and
     # for example-cafe-db to finish seeding (so the first run_sql has data to hit).
