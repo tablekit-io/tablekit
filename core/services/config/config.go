@@ -48,6 +48,10 @@ type Config struct {
 	AccessTTL time.Duration
 	// RefreshTTL is how long a refresh token is valid.
 	RefreshTTL time.Duration
+	// Environment is the deployment environment name (TABLEKIT_ENV). Only the
+	// exact value "development" enables development-only conveniences that are
+	// unsafe in production (see IsDevelopment). Empty in production.
+	Environment string
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -67,7 +71,16 @@ func Load() *Config {
 		SigningKey:    os.Getenv("SIGNING_KEY"),
 		AccessTTL:     durationOrDefault("ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:    durationOrDefault("REFRESH_TTL", 7*24*time.Hour),
+		Environment:   os.Getenv("TABLEKIT_ENV"),
 	}
+}
+
+// IsDevelopment reports whether the server runs in the development environment,
+// which enables conveniences unsafe in production — notably dev-only OAuth client
+// self-heal at /authorize. Exact match against "development", default-deny, so an
+// unset or misconfigured TABLEKIT_ENV never enables development behavior.
+func (c *Config) IsDevelopment() bool {
+	return c.Environment == "development"
 }
 
 // DatabaseDSN returns the connection string for tablekit's own state database,

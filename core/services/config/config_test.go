@@ -45,6 +45,25 @@ func TestLoadOverrides(t *testing.T) {
 	assert.Equal(t, "https://mcp.example.com", configService.PublicBaseURL)
 }
 
+func TestIsDevelopment(t *testing.T) {
+	// Only the exact value "development" enables development behavior; everything
+	// else (including empty and near-misses) is default-deny.
+	cases := map[string]bool{
+		"development": true,
+		"":            false,
+		"production":  false,
+		"dev":         false,
+		"Development": false,
+		"development ": false,
+	}
+	for value, want := range cases {
+		t.Run("TABLEKIT_ENV="+value, func(t *testing.T) {
+			t.Setenv("TABLEKIT_ENV", value)
+			assert.Equal(t, want, Load().IsDevelopment())
+		})
+	}
+}
+
 func TestResolveDatabasesFile(t *testing.T) {
 	write := func(t *testing.T, path string) {
 		require.NoError(t, os.WriteFile(path, []byte("databases: {}\n"), 0o600))

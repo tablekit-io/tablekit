@@ -7,8 +7,11 @@ services:
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
 
       # Development marker: turns on real (materialized) foreign-key constraints in
-      # the schema migration. Unset/other values keep FK columns indexed but
-      # unconstrained. See core/db/schema.go and core/db/ddl/foreign_keys.sql.
+      # the schema migration, and dev-only OAuth client self-heal at /authorize
+      # (recreates a wiped client so Reconnect works without re-adding the
+      # connector). Unset/other values keep FK columns indexed but unconstrained
+      # and reject unknown clients. See core/db/schema.go, core/db/ddl/foreign_keys.sql,
+      # and core/http/app/oauth/authorize.go.
       TABLEKIT_ENV: development
 
       # Persist Go module + build caches in the gocache named volume (mounted

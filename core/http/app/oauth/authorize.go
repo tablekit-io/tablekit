@@ -70,8 +70,25 @@ func (h *Handlers) HandleAuthorize(c *gin.Context) {
 		return
 	}
 	if client == nil {
-		authorizeError(c, "unknown client_id")
-		return
+		if !h.appServices.Config.IsDevelopment() {
+			authorizeError(c, "unknown client_id")
+			return
+		}
+		// Dev-only self-heal: a wiped dev DB drops the clients row the MCP client
+		// still has cached, so recreate it from the request and continue —
+		// reconnect works without re-adding the connector. Deliberately unsafe in
+		// production (redirect_uri is unvalidated here, so it would let a code be
+		// diverted to an attacker-chosen URL), hence the development gate.
+		client = &store.Client{
+			ClientID:     clientID,
+			RedirectURIs: []string{redirectURI},
+			Type:         store.ClientTypeOAuth,
+			CreatedAt:    time.Now(),
+		}
+		if err := h.appServices.Clients.SaveClient(c.Request.Context(), client); err != nil {
+			authorizeError(c, "internal error creating client")
+			return
+		}
 	}
 	if !slices.Contains(client.RedirectURIs, redirectURI) {
 		authorizeError(c, "redirect_uri not registered for this client")
