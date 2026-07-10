@@ -57,16 +57,10 @@ services:
 
     ports:
       # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
-      - target: ${APP_PORT:-8080}
-        published: ${APP_PORT:-8080}
-        protocol: tcp
-        mode: host
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
 
       # control port: /, /health, reserved for ops
-      - target: ${CONTROL_PORT:-8081}
-        published: ${CONTROL_PORT:-8081}
-        protocol: tcp
-        mode: host
+      - "${CONTROL_PORT:-8081}:${CONTROL_PORT:-8081}"
 
     volumes:
       - type: bind
