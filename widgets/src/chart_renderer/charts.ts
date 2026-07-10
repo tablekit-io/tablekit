@@ -105,7 +105,7 @@ export function toCartesianModel(
     });
 
     const config: ChartConfig = Object.fromEntries(
-        series.map((s) => [s.key, {label: s.label, color: s.color}]),
+        series.map((s) => [s.key, {label: s.label}]),
     );
 
     return {
@@ -157,7 +157,7 @@ export function toProportionalModel(
     const config: ChartConfig = {};
     for (const layer of layers) {
         for (const slice of layer.data) {
-            config[slice.name] = {label: slice.name, color: slice.color};
+            config[slice.name] = {label: slice.name};
         }
     }
 
