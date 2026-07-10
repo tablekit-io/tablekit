@@ -1,11 +1,7 @@
 import '../index.css';
 import {useEffect, useMemo, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {
-    useApp,
-    useDocumentTheme,
-    useHostStyleVariables,
-} from '@modelcontextprotocol/ext-apps/react';
+import {useHost} from './host';
 import {
     Area,
     Bar,
@@ -278,58 +274,36 @@ const ChartView = ({
 };
 
 const App = () => {
-    // The render tool's arguments (the axis/series or value/layer mapping) and
-    // the discriminator naming which chart to draw, both pushed by the host.
-    const [toolArgs, setToolArgs] = useState<Record<string, unknown> | null>(
-        null,
-    );
-    const [tool, setTool] = useState<TToolName | null>(null);
+    // One interface over whichever host runtime we're in — ChatGPT's
+    // window.openai or an MCP-UI postMessage host. See host.ts.
+    const {toolArgs, toolName, theme, canExport, ready, callTool, openLink} =
+        useHost();
+
     const [data, setData] = useState<TChartData | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [timedOut, setTimedOut] = useState(false);
     const [activeTab, setActiveTab] = useState('chart');
     const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
     const [copied, setCopied] = useState(false);
 
-    // Connect to the host and wire the input/result handlers before the
-    // handshake completes (onAppCreated runs pre-connect).
-    const {app, isConnected} = useApp({
-        appInfo: {name: 'tablekit-chart-renderer', version: '0.1.0'},
-        capabilities: {},
-        onAppCreated: (created) => {
-            created.ontoolinput = (params) =>
-                setToolArgs(params.arguments ?? {});
-            created.ontoolresult = (params) => {
-                const name = (
-                    params.structuredContent as {tool?: string} | undefined
-                )?.tool;
-                if (
-                    name === 'show_bar_line_area_chart' ||
-                    name === 'show_pie_donut_sunburst_chart'
-                ) {
-                    setTool(name);
-                }
-            };
-        },
-    });
+    // Which chart to draw, from the render tool's structured result. Derived, not
+    // stored: the host owns this value, so there's nothing to keep in sync.
+    const tool: TToolName | null =
+        toolName === 'show_bar_line_area_chart' ||
+        toolName === 'show_pie_donut_sunburst_chart'
+            ? toolName
+            : null;
 
-    // Mirror host style variables + theme onto the document so shadcn tokens and
-    // the `.dark` variant track the host app.
-    useHostStyleVariables(app);
-    const theme = useDocumentTheme();
-
-    // Once connected and we know which query to chart, load its full result over
-    // the bridge via the app-only fetch_chart_data tool.
+    // Once the host is ready and we know which query to chart, load its full
+    // result over the bridge via the app-only fetch_chart_data tool.
     const queryKey = queryKeyOf(toolArgs);
     useEffect(() => {
-        if (!app || !isConnected || !queryKey) {
+        if (!ready || !queryKey) {
             return;
         }
         let cancelled = false;
         setError(null);
-        app.callServerTool({
-            name: 'fetch_chart_data',
-            arguments: {query_key: queryKey},
-        })
+        callTool('fetch_chart_data', {query_key: queryKey})
             .then((result) => {
                 if (!cancelled) {
                     setData(readChartData(result));
@@ -343,7 +317,19 @@ const App = () => {
         return () => {
             cancelled = true;
         };
-    }, [app, isConnected, queryKey]);
+    }, [ready, queryKey, callTool]);
+
+    // Watchdog: if the host never delivers the render arguments (a host that
+    // doesn't forward tool input, or a protocol mismatch), the fetch guard above
+    // never opens and the widget would spin forever. Surface that as an error
+    // after a grace period instead of an eternal spinner.
+    useEffect(() => {
+        if (data || error) {
+            return;
+        }
+        const timer = setTimeout(() => setTimedOut(true), 12000);
+        return () => clearTimeout(timer);
+    }, [data, error]);
 
     // Infer the chart family: the discriminator if the host sent it, otherwise
     // the shape of the arguments (x/y => cartesian, value_prop => proportional).
@@ -356,24 +342,20 @@ const App = () => {
         return null;
     }, [tool, toolArgs]);
 
-    // The host opens links in the user's real browser; only offer export when it
-    // advertises that capability.
-    const canExport = isConnected && !!app?.getHostCapabilities()?.openLinks;
-
     const exportAs = async (format: 'csv' | 'json') => {
-        if (!app || !queryKey) {
+        if (!queryKey) {
             return;
         }
         setExporting(format);
         try {
-            const result = await app.callServerTool({
-                name: 'get_export_url',
-                arguments: {query_key: queryKey, format},
+            const result = await callTool('get_export_url', {
+                query_key: queryKey,
+                format,
             });
             const url = (result.structuredContent as {url?: string} | undefined)
                 ?.url;
             if (url) {
-                await app.openLink({url});
+                openLink(url);
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -415,6 +397,19 @@ const App = () => {
     }
 
     if (!data) {
+        if (timedOut) {
+            return (
+                <Card className="m-2 flex h-64 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+                    <TriangleAlert size={16} />
+                    <span>
+                        Couldn’t load chart data
+                        {queryKey
+                            ? '.'
+                            : ' — the host didn’t send the chart’s query key.'}
+                    </span>
+                </Card>
+            );
+        }
         return (
             <Card className="m-2 flex h-64 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
                 <Loader2 size={16} className="animate-spin" />

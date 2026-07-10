@@ -8,7 +8,6 @@ import (
 
 	"core/helpers"
 	"core/mcp/handlers/shared"
-	"core/mcp/ui"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
@@ -45,8 +44,8 @@ func Register(s *mcp.Server, deps shared.Deps) {
 			OpenWorldHint:   helpers.Pointer(false),
 		},
 	}
-	if uri := ui.WidgetURI(shared.ChartWidget); uri != "" {
-		tool.Meta = mcp.Meta{"ui": map[string]any{"resourceUri": uri}}
+	if meta := shared.ChartWidgetMeta(); meta != nil {
+		tool.Meta = meta
 	}
 	tool.InputSchema = shared.InputSchema[input](schemaJSON)
 	mcp.AddTool(s, tool, handle(deps))

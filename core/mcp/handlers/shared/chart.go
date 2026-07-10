@@ -1,6 +1,10 @@
 package shared
 
-import "github.com/modelcontextprotocol/go-sdk/mcp"
+import (
+	"core/mcp/ui"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
 
 // chartWidget is the @tablekit/widgets template both render tools link. The
 // widget reads the render tool's arguments (the axis/series mapping) from the
@@ -27,6 +31,24 @@ type ColumnInfo struct {
 type ChartRenderOutput struct {
 	Tool             string   `json:"tool" jsonschema:"the tool that produced this result"`
 	HintsForAIAgents []string `json:"hints_for_ai_agents,omitempty" jsonschema:"guidance for the calling AI agent on how best to use this result"`
+}
+
+// ChartWidgetMeta is the tool _meta that links a render tool to the chart widget
+// template, or nil when the widget isn't built yet. It advertises the same ui://
+// URI under two keys so both host families pick it up: `ui.resourceUri` is the
+// MCP Apps convention (Claude and other MCP-UI hosts), while ChatGPT's Apps SDK
+// binds the tool call to its template via `openai/outputTemplate` — without that
+// key ChatGPT renders the shell but never populates window.openai.toolInput /
+// toolOutput inside the iframe, so the widget can't learn its query_key.
+func ChartWidgetMeta() mcp.Meta {
+	uri := ui.WidgetURI(ChartWidget)
+	if uri == "" {
+		return nil
+	}
+	return mcp.Meta{
+		"ui":                    map[string]any{"resourceUri": uri},
+		"openai/outputTemplate": uri,
+	}
 }
 
 // ChartRenderResult builds the discriminator result a render tool returns. tool

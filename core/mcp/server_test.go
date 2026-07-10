@@ -107,6 +107,12 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 			require.NotNil(t, meta, "built %q should carry _meta.ui", name)
 			uri, _ := meta["resourceUri"].(string)
 			assert.Contains(t, uri, "ui://tablekit/chart_renderer-")
+
+			// ChatGPT's Apps SDK binds the tool call to its template via
+			// _meta["openai/outputTemplate"]; it must point at the same widget URI
+			// so window.openai.toolInput/toolOutput hydrate inside the iframe.
+			openaiURI, _ := tools[name].Meta["openai/outputTemplate"].(string)
+			assert.Equal(t, uri, openaiURI, "%q openai/outputTemplate should match resourceUri", name)
 		}
 	}
 }
