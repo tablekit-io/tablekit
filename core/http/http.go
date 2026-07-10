@@ -5,7 +5,6 @@
 package http
 
 import (
-	"os"
 	"time"
 
 	"core/http/app"
@@ -17,15 +16,12 @@ import (
 )
 
 func init() {
-	// Run Gin in release mode outside development so it does not dump its raw
-	// [GIN-debug] route/warning lines at startup. Mirrors config.IsDevelopment's
-	// exact-match semantics; read from the environment here to avoid coupling this
-	// package init to services/config load order.
-	if os.Getenv("TABLEKIT_ENV") != "development" {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	// Always run Gin in release mode so it never dumps its [GIN-debug]
+	// route/warning lines at startup — they carry no operational value and just
+	// add noise, in development as much as production.
+	gin.SetMode(gin.ReleaseMode)
 	// Point Gin's own writers at zerolog so any internal prints it still makes
-	// (dev-mode debug lines, panic recovery) come out as JSON, not raw text.
+	// (e.g. panic recovery) come out as JSON, not raw text.
 	gin.DefaultWriter = log.Logger
 	gin.DefaultErrorWriter = log.Logger
 }
