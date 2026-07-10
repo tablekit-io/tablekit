@@ -76,6 +76,6 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, shared.ChartRenderOutput
 			log.Warn().Str("query_key", in.QueryKey).Err(err).Msg("chart query_key not found")
 			return nil, shared.ChartRenderOutput{}, err
 		}
-		return shared.ChartRenderResult("show_bar_line_area_chart", "bar/line/area chart")
+		return shared.ChartRenderResult("show_bar_line_area_chart", "bar/line/area chart", in)
 	}
 }

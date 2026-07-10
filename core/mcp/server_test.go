@@ -96,12 +96,6 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 		appUI := uiMeta(tools[name])
 		require.NotNil(t, appUI, "%s should carry _meta.ui", name)
 		assert.Equal(t, []any{"app"}, appUI["visibility"], "%s should be app-only", name)
-
-		// ChatGPT gates component-initiated tool calls behind
-		// _meta["openai/widgetAccessible"]; without it window.openai.callTool
-		// rejects the widget's fetch/export request.
-		assert.Equal(t, true, tools[name].Meta["openai/widgetAccessible"],
-			"%s must be widget-accessible for ChatGPT", name)
 	}
 
 	// Build-dependent: the render tools link the shared chart widget via
@@ -113,12 +107,6 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 			require.NotNil(t, meta, "built %q should carry _meta.ui", name)
 			uri, _ := meta["resourceUri"].(string)
 			assert.Contains(t, uri, "ui://tablekit/chart_renderer-")
-
-			// ChatGPT's Apps SDK binds the tool call to its template via
-			// _meta["openai/outputTemplate"]; it must point at the same widget URI
-			// so window.openai.toolInput/toolOutput hydrate inside the iframe.
-			openaiURI, _ := tools[name].Meta["openai/outputTemplate"].(string)
-			assert.Equal(t, uri, openaiURI, "%q openai/outputTemplate should match resourceUri", name)
 		}
 	}
 }

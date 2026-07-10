@@ -1,186 +1,272 @@
-// Host bridge: the chart widget runs inside two different, incompatible host
-// runtimes, and this module hides that difference behind one interface.
+// Host bridge: the chart widget is the MCP *client* of its host. Both Claude and
+// ChatGPT are MCP-UI postMessage hosts — the widget handshakes over postMessage,
+// receives the render tool's arguments via an `ontoolinput` notification, and
+// calls other tools with `callServerTool`.
 //
-//   - MCP-UI hosts (Claude, MCP Inspector, …) speak the @modelcontextprotocol
-//     /ext-apps postMessage protocol: the widget is an MCP client that hand-
-//     shakes over a PostMessageTransport, receives the render tool's arguments
-//     via an `ontoolinput` notification, and calls other tools with
-//     `app.callServerTool`.
-//   - ChatGPT's Apps SDK injects a `window.openai` global instead: the render
-//     tool's arguments arrive as `window.openai.toolInput`, the structured
-//     result as `window.openai.toolOutput`, tools are called with
-//     `window.openai.callTool`, and updates are announced via the
-//     `openai:set_globals` DOM event.
+// We use @modelcontextprotocol/ext-apps' `App` for the protocol, but drive it
+// with our OWN transport (ResilientTransport) instead of the SDK's built-in
+// PostMessageTransport, because the built-in one fails to connect to ChatGPT:
+//   1. It ignores any message whose `event.source !== window.parent`. ChatGPT
+//      proxies host messages through a sandbox frame whose window ref isn't our
+//      parent, so the handshake response is dropped. We accept any source.
+//   2. It fires `ui/initialize` once; if the host isn't listening on the first
+//      tick (ChatGPT isn't) the request is lost. We re-fire with backoff.
+//   3. It strictly zod-validates the host's initialize response; a missing field
+//      throws. We backfill defaults so validation passes.
 //
-// The two are unified into `HostBridge` so the chart UI depends only on this
-// interface, never on a concrete host SDK. Adding a third host later is a new
-// adapter here, not a change to the rendering code.
-import {useCallback, useEffect, useState, useSyncExternalStore} from 'react';
-import {
-    useApp,
-    useDocumentTheme,
-    useHostStyleVariables,
-} from '@modelcontextprotocol/ext-apps/react';
+// This module is INSTRUMENTED: it logs every step to the console (console.debug/
+// info) so a stuck handshake can be diagnosed from the host's devtools. The logs
+// are verbose on purpose — this is the dev build.
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {App} from '@modelcontextprotocol/ext-apps';
 
-// The result shape both hosts' tool calls share: only structuredContent matters
-// to this widget (fetch_chart_data's rows, get_export_url's signed url).
+const TAG = '[tablekit-widget]';
+// Verbose instrumentation switch. Kept on for the dev/diagnostic build so the
+// host's console shows the full handshake; flip to false to silence.
+const DEBUG = true;
+const log = (...args: unknown[]): void => {
+    if (DEBUG) {
+        console.debug(TAG, ...args);
+    }
+};
+const info = (...args: unknown[]): void => {
+    if (DEBUG) {
+        console.info(TAG, ...args);
+    }
+};
+
+// A postMessage JSON-RPC frame (the subset we read). Loosely typed: the host may
+// send requests, responses, or notifications.
+type TMessage = {
+    readonly jsonrpc?: string;
+    readonly id?: unknown;
+    readonly method?: string;
+    result?: Record<string, unknown>;
+    readonly error?: unknown;
+    readonly params?: unknown;
+};
+
+// The MCP Apps result shape both hosts' tool calls share; only structuredContent
+// matters here (fetch_chart_data's rows, get_export_url's signed url).
 export type ToolResult = {structuredContent?: unknown};
 
-// HostBridge is the single surface the chart UI talks to, regardless of host.
+// HostBridge is the single surface the chart UI talks to.
 export interface HostBridge {
-    // True once the host has connected/hydrated enough to call tools. Until then
-    // the widget shows its loading state rather than firing a fetch that would
-    // race the handshake.
     ready: boolean;
-    // The render tool's arguments: query_key plus the axis/series mapping.
     toolArgs: Record<string, unknown> | null;
-    // The discriminator from the render tool's structured result ({tool: name}).
     toolName: string | null;
     theme: 'light' | 'dark';
-    // Whether the host can open external links (drives the export button).
     canExport: boolean;
-    // Invoke another MCP tool (fetch_chart_data, get_export_url) over the host.
     callTool: (name: string, args: Record<string, unknown>) => Promise<ToolResult>;
-    // Open a URL in the user's real browser (the host owns the navigation).
     openLink: (url: string) => void;
 }
 
-// --- ChatGPT (window.openai) adapter -------------------------------------
+// ResilientTransport is a lenient postMessage transport for the MCP Apps
+// handshake (see the module header for why the SDK's own one doesn't reach
+// ChatGPT). It implements the MCP SDK Transport surface structurally.
+class ResilientTransport {
+    onclose?: () => void;
+    onerror?: (error: Error) => void;
+    onmessage?: (message: TMessage) => void;
+    sessionId?: string;
+    setProtocolVersion?: (version: string) => void;
 
-// The subset of ChatGPT's Apps SDK runtime this widget uses. The real global
-// carries more; we type only what we touch.
-interface OpenAiGlobals {
-    toolInput?: Record<string, unknown>;
-    toolOutput?: unknown;
-    theme?: 'light' | 'dark';
-    callTool: (name: string, args: Record<string, unknown>) => Promise<ToolResult>;
-    openExternal: (opts: {href: string; redirectUrl?: boolean}) => void;
+    // The id of the in-flight ui/initialize request, so we can recognise (and
+    // backfill) its response and stop re-firing once it arrives.
+    private initId: unknown = undefined;
+    private retryTimer: ReturnType<typeof setInterval> | null = null;
+    private settled = false;
+
+    private readonly listener = (event: MessageEvent): void => {
+        const data = event.data as TMessage | undefined;
+        if (!data || data.jsonrpc !== '2.0') {
+            return;
+        }
+        const sameSource = event.source === window.parent;
+        log(
+            'recv',
+            data.method ?? `response#${String(data.id)}`,
+            {sameSource, origin: event.origin},
+            data,
+        );
+
+        // The init response: stop re-firing and backfill any fields ext-apps'
+        // strict schema requires but the host omitted, so connect() doesn't throw.
+        if (data.id != null && data.id === this.initId && data.result) {
+            info('init response received; backfilling + settling handshake');
+            this.settled = true;
+            this.stopRetry();
+            const result = data.result;
+            result.protocolVersion ??= '2026-01-26';
+            result.hostInfo ??= {name: 'unknown-host', version: '0.0.0'};
+            result.hostCapabilities ??= {};
+            result.hostContext ??= {};
+        }
+        this.onmessage?.(data);
+    };
+
+    async start(): Promise<void> {
+        info('transport.start — listening for host messages (any source)');
+        window.addEventListener('message', this.listener);
+    }
+
+    async send(message: TMessage): Promise<void> {
+        log('send', message.method ?? `response#${String(message.id)}`, message);
+        window.parent.postMessage(message, '*');
+
+        // Re-fire the handshake until the host answers: ChatGPT may not be
+        // listening when the first ui/initialize lands.
+        if (message.method === 'ui/initialize') {
+            this.initId = message.id;
+            let attempts = 0;
+            this.stopRetry();
+            this.retryTimer = setInterval(() => {
+                attempts += 1;
+                if (this.settled || attempts > 8) {
+                    if (!this.settled) {
+                        info(`handshake not acked after ${attempts} retries`);
+                    }
+                    this.stopRetry();
+                    return;
+                }
+                log(`re-firing ui/initialize (attempt ${attempts})`);
+                window.parent.postMessage(message, '*');
+            }, 180);
+        }
+    }
+
+    private stopRetry(): void {
+        if (this.retryTimer) {
+            clearInterval(this.retryTimer);
+            this.retryTimer = null;
+        }
+    }
+
+    async close(): Promise<void> {
+        info('transport.close');
+        this.stopRetry();
+        window.removeEventListener('message', this.listener);
+        this.onclose?.();
+    }
 }
 
-const SET_GLOBALS_EVENT = 'openai:set_globals';
+// useHost connects to the host over the resilient bridge and exposes it as a
+// HostBridge. The App instance lives in a ref; connection state drives the UI.
+export function useHost(): HostBridge {
+    // The render arguments (query_key + the axis/series mapping) are read from the
+    // tool-RESULT: the render tool echoes them into structuredContent.args, and
+    // the host delivers the result against the widget's own call. We deliberately
+    // do NOT read the host's tool-input notification — ChatGPT scopes it to the
+    // assistant turn, so a same-turn query_database call clobbers it; the result
+    // is the only reliably-bound source.
+    const [toolArgs, setToolArgs] = useState<Record<string, unknown> | null>(null);
+    const [toolName, setToolName] = useState<string | null>(null);
+    const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [ready, setReady] = useState(false);
+    const [canExport, setCanExport] = useState(false);
+    const appRef = useRef<App | null>(null);
 
-const openAi = (): OpenAiGlobals | undefined =>
-    (globalThis as {openai?: OpenAiGlobals}).openai;
+    useEffect(() => {
+        info('mounting; creating App + connecting');
+        const app = new App(
+            {name: 'tablekit-chart-renderer', version: '0.1.0'},
+            {},
+            {autoResize: true},
+        );
+        appRef.current = app;
 
-// hasOpenAiHost reports whether the ChatGPT Apps SDK runtime is present. The host
-// is fixed for a widget's lifetime, so this is read once at mount to pick the
-// adapter — never inside a hook, which would risk violating the rules of hooks.
-export const hasOpenAiHost = (): boolean =>
-    typeof globalThis !== 'undefined' && 'openai' in globalThis;
+        // Register notification handlers BEFORE connect so none are missed.
+        // Logged only for diagnostics — we don't render from tool-input (see the
+        // note on the state above).
+        app.ontoolinput = (params) => log('ontoolinput (ignored)', params?.arguments);
+        app.ontoolresult = (params) => {
+            const structured = params?.structuredContent as
+                | {tool?: string; args?: Record<string, unknown>}
+                | undefined;
+            info('ontoolresult', structured);
+            if (structured?.tool) {
+                setToolName(structured.tool);
+            }
+            if (structured?.args) {
+                setToolArgs(structured.args);
+            }
+        };
+        app.onhostcontextchanged = (context) => {
+            info('onhostcontextchanged', {theme: context?.theme});
+            if (context?.theme === 'light' || context?.theme === 'dark') {
+                setTheme(context.theme);
+            }
+        };
+        app.onerror = (error) => console.error(TAG, 'app.onerror', error);
 
-// useOpenAiGlobal subscribes a component to one window.openai global, re-rendering
-// whenever ChatGPT dispatches openai:set_globals (its only change signal).
-function useOpenAiGlobal<K extends keyof OpenAiGlobals>(
-    key: K,
-): OpenAiGlobals[K] | undefined {
-    return useSyncExternalStore(
-        (onChange) => {
-            window.addEventListener(SET_GLOBALS_EVENT, onChange, {passive: true});
-            return () => window.removeEventListener(SET_GLOBALS_EVENT, onChange);
-        },
-        () => openAi()?.[key],
-    );
-}
+        const transport = new ResilientTransport();
+        // App.connect wants the SDK's Transport type; ResilientTransport is
+        // structurally compatible. Cast through a loose signature to avoid
+        // pulling the SDK's transport types into the widget.
+        const connect = app.connect.bind(app) as (t: unknown) => Promise<void>;
 
-function useChatGptHost(): HostBridge {
-    const toolInput = useOpenAiGlobal('toolInput');
-    const toolOutput = useOpenAiGlobal('toolOutput');
-    const theme = useOpenAiGlobal('theme') ?? 'light';
+        let cancelled = false;
+        connect(transport)
+            .then(() => {
+                if (cancelled) {
+                    return;
+                }
+                const context = app.getHostContext();
+                const capabilities = app.getHostCapabilities();
+                info('connected', {
+                    hostContext: context,
+                    hostCapabilities: capabilities,
+                });
+                setReady(true);
+                if (context?.theme === 'light' || context?.theme === 'dark') {
+                    setTheme(context.theme);
+                }
+                setCanExport(!!capabilities?.openLinks);
+            })
+            .catch((error: unknown) => {
+                if (!cancelled) {
+                    console.error(TAG, 'connect failed', error);
+                }
+            });
 
-    // Mirror ChatGPT's theme onto the document so the widget's `.dark` variant
-    // tracks the host (MCP-UI hosts get this via useHostStyleVariables instead).
+        return () => {
+            cancelled = true;
+            void app.close();
+            appRef.current = null;
+        };
+    }, []);
+
+    // Mirror the host theme onto the document so the widget's `.dark` variant
+    // tracks the host (the sandboxed iframe can't read the host's in-app theme).
     useEffect(() => {
         document.documentElement.classList.toggle('dark', theme === 'dark');
     }, [theme]);
 
     const callTool = useCallback(
         (name: string, args: Record<string, unknown>): Promise<ToolResult> => {
-            const api = openAi();
-            return api
-                ? api.callTool(name, args)
-                : Promise.reject(new Error('ChatGPT host unavailable'));
+            const app = appRef.current;
+            if (!app) {
+                return Promise.reject(new Error('host not connected'));
+            }
+            info('callTool ->', name, args);
+            return app
+                .callServerTool({name, arguments: args})
+                .then((result) => {
+                    info('callTool <-', name, result);
+                    return result as ToolResult;
+                })
+                .catch((error: unknown) => {
+                    console.error(TAG, 'callTool failed', name, error);
+                    throw error;
+                });
         },
         [],
     );
+
     const openLink = useCallback((url: string) => {
-        openAi()?.openExternal({href: url});
+        info('openLink', url);
+        void appRef.current?.openLink({url});
     }, []);
 
-    return {
-        // window.openai is present synchronously in ChatGPT; toolInput may lag by
-        // one set_globals tick, which the fetch effect handles via its queryKey
-        // guard, so "ready" simply means the runtime exists.
-        ready: hasOpenAiHost(),
-        toolArgs: toolInput ?? null,
-        toolName: (toolOutput as {tool?: string} | undefined)?.tool ?? null,
-        theme,
-        canExport: typeof openAi()?.openExternal === 'function',
-        callTool,
-        openLink,
-    };
-}
-
-// --- MCP-UI (ext-apps) adapter -------------------------------------------
-
-function useMcpUiHost(): HostBridge {
-    const [toolArgs, setToolArgs] = useState<Record<string, unknown> | null>(null);
-    const [toolName, setToolName] = useState<string | null>(null);
-
-    // Register the notification handlers in onAppCreated (before connect) so no
-    // tool-input/result notification is missed during the handshake.
-    const {app, isConnected} = useApp({
-        appInfo: {name: 'tablekit-chart-renderer', version: '0.1.0'},
-        capabilities: {},
-        onAppCreated: (created) => {
-            created.ontoolinput = (params) => setToolArgs(params.arguments ?? {});
-            created.ontoolresult = (params) => {
-                const name = (params.structuredContent as {tool?: string} | undefined)
-                    ?.tool;
-                if (name) {
-                    setToolName(name);
-                }
-            };
-        },
-    });
-
-    useHostStyleVariables(app);
-    const theme = useDocumentTheme();
-
-    const callTool = useCallback(
-        (name: string, args: Record<string, unknown>): Promise<ToolResult> =>
-            app
-                ? app.callServerTool({name, arguments: args})
-                : Promise.reject(new Error('MCP host unavailable')),
-        [app],
-    );
-    const openLink = useCallback(
-        (url: string) => {
-            void app?.openLink({url});
-        },
-        [app],
-    );
-
-    return {
-        ready: isConnected,
-        toolArgs,
-        toolName,
-        theme: theme === 'dark' ? 'dark' : 'light',
-        // The host opens links in the user's real browser; only offer export when
-        // it advertises that capability.
-        canExport: isConnected && !!app?.getHostCapabilities()?.openLinks,
-        callTool,
-        openLink,
-    };
-}
-
-// useHost selects the adapter for the current host. `hasOpenAiHost()` is a stable
-// per-page fact, so this branch is taken once and never flips between renders —
-// each render calls exactly one host hook, satisfying the rules of hooks.
-export function useHost(): HostBridge {
-    if (hasOpenAiHost()) {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
-        return useChatGptHost();
-    }
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useMcpUiHost();
+    return {ready, toolArgs, toolName, theme, canExport, callTool, openLink};
 }

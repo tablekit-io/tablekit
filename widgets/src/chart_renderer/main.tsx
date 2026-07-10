@@ -327,9 +327,16 @@ const App = () => {
         if (data || error) {
             return;
         }
-        const timer = setTimeout(() => setTimedOut(true), 12000);
+        const timer = setTimeout(() => {
+            console.warn('[tablekit-widget] load watchdog fired', {
+                ready,
+                hasQueryKey: !!queryKey,
+                toolName,
+            });
+            setTimedOut(true);
+        }, 12000);
         return () => clearTimeout(timer);
-    }, [data, error]);
+    }, [data, error, ready, queryKey, toolName]);
 
     // Infer the chart family: the discriminator if the host sent it, otherwise
     // the shape of the arguments (x/y => cartesian, value_prop => proportional).
