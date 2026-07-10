@@ -9,7 +9,7 @@ services:
       # Development marker: turns on real (materialized) foreign-key constraints in
       # the schema migration. Unset/other values keep FK columns indexed but
       # unconstrained. See core/db/schema.go and core/db/ddl/foreign_keys.sql.
-      TABLE_KIT_ENV: development
+      TABLEKIT_ENV: development
 
       # Persist Go module + build caches in the gocache named volume (mounted
       # below) so deps are downloaded and compiled once, not on every start.

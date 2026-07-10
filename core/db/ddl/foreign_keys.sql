@@ -1,5 +1,5 @@
 -- Real foreign-key constraints, applied by 00001_schema.go ONLY when
--- TABLE_KIT_ENV=development. In other environments these columns exist and are
+-- TABLEKIT_ENV=development. In other environments these columns exist and are
 -- indexed (see schema.sql) but carry no constraint, so production keeps the
 -- flexibility/perf of unconstrained columns while development gets full
 -- referential integrity for debugging.

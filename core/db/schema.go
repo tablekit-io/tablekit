@@ -17,18 +17,18 @@ import (
 var schemaSQL string
 
 // foreignKeysSQL adds the real foreign-key constraints. It is applied only when
-// TABLE_KIT_ENV=development, so production keeps indexed-but-unconstrained columns
+// TABLEKIT_ENV=development, so production keeps indexed-but-unconstrained columns
 // while development gets full referential integrity.
 //
 //go:embed ddl/foreign_keys.sql
 var foreignKeysSQL string
 
-// developmentEnv is the TABLE_KIT_ENV value that turns on real foreign keys.
+// developmentEnv is the TABLEKIT_ENV value that turns on real foreign keys.
 const developmentEnv = "development"
 
 // isDevelopment reports whether real foreign keys should be materialized.
 func isDevelopment() bool {
-	return os.Getenv("TABLE_KIT_ENV") == developmentEnv
+	return os.Getenv("TABLEKIT_ENV") == developmentEnv
 }
 
 // init registers the single from-scratch schema migration. It is a Go migration
