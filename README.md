@@ -9,6 +9,14 @@ MCP server that lets you ask ChatGPT or Claude real data questions to get analyt
 
 **Database Support**: `Postgres`, `MySQL`, `BigQuery` (coming soon)
 
+
+
+https://github.com/user-attachments/assets/424b887a-3f22-47ff-9df6-2a3b2837e86a
+
+
+
+
+
 ## Features
 
 1. 📡 **Remote MCP** — HTTP with OAuth authentication. Basically a fancy way to say it works with Claude web or ChatGPT web.
