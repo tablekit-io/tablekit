@@ -30,7 +30,7 @@ services:
       # Required base64 HS256 signing key — TableKit does not generate one, so
       # `up` fails loudly if it is unset. Generate with `openssl rand -base64 32`
       # and share the same value across instances.
-      SIGNING_KEY: "${SIGNING_KEY:-}"
+      SIGNING_KEY: "${SIGNING_KEY:?set SIGNING_KEY (openssl rand -base64 32)}"
 
       # It helps us immensely if you do enable this
       ENABLE_ANONYMOUS_TELEMETRY: "${ENABLE_ANONYMOUS_TELEMETRY:-}"
