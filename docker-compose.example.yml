@@ -8,6 +8,12 @@ services:
       # The externally reachable base url; used as the OAuth issuer.
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
 
+      # Ports the server listens on. app port: MCP (/mcp) + OAuth; control port:
+      # /health. Overridable from the host env; the ports mapping below tracks
+      # the same values so a change takes effect end-to-end.
+      APP_PORT: "${APP_PORT:-8080}"
+      CONTROL_PORT: "${CONTROL_PORT:-8081}"
+
       # TableKit's own state lives in the postgres service below. The
       # structured DB_* vars take precedence over DATABASE_URL; change the
       # password to match the database service.
@@ -24,17 +30,20 @@ services:
       # Required base64 HS256 signing key — TableKit does not generate one, so
       # `up` fails loudly if it is unset. Generate with `openssl rand -base64 32`
       # and share the same value across instances.
-      SIGNING_KEY: "${SIGNING_KEY:?set SIGNING_KEY (openssl rand -base64 32)}"
+      SIGNING_KEY: "${SIGNING_KEY:-}"
+
+      # It helps us immensely if you do enable this
+      ENABLE_ANONYMOUS_TELEMETRY: "${ENABLE_ANONYMOUS_TELEMETRY:-}"
 
     ports:
       # app port: MCP (/mcp) + OAuth (/oauth/*, /register, /.well-known/*)
-      - target: 8080
-        published: 8080
+      - target: ${APP_PORT:-8080}
+        published: ${APP_PORT:-8080}
         protocol: tcp
 
       # control port: /health — keep off the public internet
-      - target: 8081
-        published: 8081
+      - target: ${CONTROL_PORT:-8081}
+        published: ${CONTROL_PORT:-8081}
         protocol: tcp
 
     volumes:
@@ -45,7 +54,7 @@ services:
         target: /app/databases.yml
 
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:${CONTROL_PORT:-8081}/health"]
       interval: 10s
       timeout: 3s
       retries: 3
