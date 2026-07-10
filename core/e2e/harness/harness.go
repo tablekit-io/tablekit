@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -110,7 +111,12 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 	controlURL := fmt.Sprintf("http://127.0.0.1:%d", controlPort)
 
 	cmd := exec.Command(bin, "serve")
-	cmd.Env = append(os.Environ(),
+	// Start from the ambient environment minus TABLEKIT_ENV: the dev container
+	// sets TABLEKIT_ENV=development, which would silently flip every server this
+	// harness starts into development mode. Stripping it means the server defaults
+	// to production, and a test that wants development opts in explicitly via
+	// extraEnv (TABLEKIT_ENV=development), appended below.
+	cmd.Env = append(environWithout("TABLEKIT_ENV"),
 		fmt.Sprintf("APP_PORT=%d", appPort),
 		fmt.Sprintf("CONTROL_PORT=%d", controlPort),
 		"SIGNING_KEY="+signingKey,
@@ -128,6 +134,21 @@ func StartServerEnv(t *testing.T, extraEnv ...string) Server {
 
 	waitHealthy(t, controlURL)
 	return Server{AppURL: appURL, ControlURL: controlURL, DBEnv: stateDBEnv}
+}
+
+// environWithout returns os.Environ() with every entry for the named variable
+// removed, so a server the harness starts does not inherit an ambient value the
+// test means to control (notably TABLEKIT_ENV, which the dev container sets).
+func environWithout(name string) []string {
+	prefix := name + "="
+	filtered := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, prefix) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }
 
 // startStateDB starts a throwaway Postgres for the server's own state and returns
