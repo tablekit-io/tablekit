@@ -96,6 +96,12 @@ func TestStoredQueryToolsRegistered(t *testing.T) {
 		appUI := uiMeta(tools[name])
 		require.NotNil(t, appUI, "%s should carry _meta.ui", name)
 		assert.Equal(t, []any{"app"}, appUI["visibility"], "%s should be app-only", name)
+
+		// ChatGPT gates component-initiated tool calls behind
+		// _meta["openai/widgetAccessible"]; without it window.openai.callTool
+		// rejects the widget's fetch/export request.
+		assert.Equal(t, true, tools[name].Meta["openai/widgetAccessible"],
+			"%s must be widget-accessible for ChatGPT", name)
 	}
 
 	// Build-dependent: the render tools link the shared chart widget via

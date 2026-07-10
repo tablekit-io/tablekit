@@ -44,7 +44,7 @@ func Register(s *mcp.Server, deps shared.Deps) {
 			OpenWorldHint:   helpers.Pointer(false),
 		},
 	}
-	tool.Meta = mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
+	tool.Meta = shared.WidgetBridgeMeta()
 	tool.InputSchema = shared.InputSchema[input](schemaJSON)
 	mcp.AddTool(s, tool, handle(deps))
 }

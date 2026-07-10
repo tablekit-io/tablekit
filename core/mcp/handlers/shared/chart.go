@@ -51,6 +51,19 @@ func ChartWidgetMeta() mcp.Meta {
 	}
 }
 
+// WidgetBridgeMeta is the _meta for an app-only tool the chart widget calls over
+// the host bridge (fetch_chart_data, get_export_url). `ui.visibility=["app"]`
+// hides it from the model while keeping it callable from the UI (the MCP Apps
+// convention); ChatGPT additionally requires `openai/widgetAccessible=true` to
+// permit component-initiated tool calls, without which window.openai.callTool
+// rejects the request and the widget can never load its rows.
+func WidgetBridgeMeta() mcp.Meta {
+	return mcp.Meta{
+		"ui":                      map[string]any{"visibility": []string{"app"}},
+		"openai/widgetAccessible": true,
+	}
+}
+
 // ChartRenderResult builds the discriminator result a render tool returns. tool
 // is the tool name the widget branches on; label is the human phrase for the
 // summary line.
