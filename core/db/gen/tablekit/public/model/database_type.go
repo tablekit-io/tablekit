@@ -15,12 +15,14 @@ const (
 	DatabaseType_Postgres DatabaseType = "postgres"
 	DatabaseType_Mysql    DatabaseType = "mysql"
 	DatabaseType_Mariadb  DatabaseType = "mariadb"
+	DatabaseType_Bigquery DatabaseType = "bigquery"
 )
 
 var DatabaseTypeAllValues = []DatabaseType{
 	DatabaseType_Postgres,
 	DatabaseType_Mysql,
 	DatabaseType_Mariadb,
+	DatabaseType_Bigquery,
 }
 
 func (e *DatabaseType) Scan(value interface{}) error {
@@ -41,6 +43,8 @@ func (e *DatabaseType) Scan(value interface{}) error {
 		*e = DatabaseType_Mysql
 	case "mariadb":
 		*e = DatabaseType_Mariadb
+	case "bigquery":
+		*e = DatabaseType_Bigquery
 	default:
 		return errors.New("jet: Invalid scan value '" + enumValue + "' for DatabaseType enum")
 	}

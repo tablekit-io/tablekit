@@ -13,8 +13,10 @@ var DatabaseType = &struct {
 	Postgres postgres.StringExpression
 	Mysql    postgres.StringExpression
 	Mariadb  postgres.StringExpression
+	Bigquery postgres.StringExpression
 }{
 	Postgres: postgres.NewEnumValue("postgres"),
 	Mysql:    postgres.NewEnumValue("mysql"),
 	Mariadb:  postgres.NewEnumValue("mariadb"),
+	Bigquery: postgres.NewEnumValue("bigquery"),
 }
