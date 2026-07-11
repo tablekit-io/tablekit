@@ -1,9 +1,10 @@
 # TableKit
 
 Talk to your database from ChatGPT and Claude. TableKit is a small,
-self-hostable MCP server you point at your Postgres, MySQL and MariaDB databases
-— then ask questions in plain English and get back tables and interactive charts.
-Every query it runs is read-only, so the assistant can look but never touch.
+self-hostable MCP server you point at your Postgres, MySQL, MariaDB and Google
+BigQuery databases — then ask questions in plain English and get back tables and
+interactive charts. Every query it runs is read-only, so the assistant can look
+but never touch.
 
 You run it on your own infrastructure. Your connection strings and data stay
 with you; the only thing the assistant ever sees is the rows your read-only
@@ -108,8 +109,8 @@ Everything is set through the environment.
 
 Databases are declared in `databases.yaml` as a map keyed by the name the
 assistant uses with `query_database` / `list_available_databases`. Each entry sets a `type`
-(`postgres`, `mysql`, or `mariadb`) and connects either with structured
-`details` **or** a single `connectionString` — not both:
+(`postgres`, `mysql`, `mariadb`, or `bigquery`). The SQL engines connect either
+with structured `details` **or** a single `connectionString` — not both:
 
 ```yaml
 databases:
@@ -141,6 +142,30 @@ object: `{ from: env, env: VAR }`, `{ from: file, path: /run/secrets/x }`, or
 `{ from: literal, value: ... }`. Every connection opens on its own, through its
 own SSH tunnel and TLS settings when configured. The full field reference is the
 JSON Schema at `core/engine/config/schemas/databases.schema.json`.
+
+A `bigquery` database is shaped differently — it is an HTTP job API, not a TCP
+server, so it has no host/port/password, TLS or SSH. It scopes to a whole GCP
+project (its datasets act like schemas) and authenticates with a service-account
+JSON key file:
+
+```yaml
+databases:
+  warehouse:
+    type: bigquery
+    details:
+      projectId: my-gcp-project
+      credentialsFilePath: /keys/bigquery-sa.json   # mount the key into the container
+      location: EU                                   # optional; omit to auto-detect
+```
+
+Write BigQuery Standard SQL against it (backtick-quoted `` `project.dataset.table` ``).
+It is read-only like every other engine, but BigQuery has no read-only
+transaction, so read-only is enforced by dry-running each query and refusing
+anything whose statement type is not a plain `SELECT`. As defense in depth, give
+the service account a viewer/jobUser role rather than any data-editing role.
+BigQuery bills by bytes scanned, so `list_available_databases` nudges the
+assistant to explore cheaply and avoid `SELECT *` when a BigQuery database is
+configured.
 
 ## How it works
 
@@ -217,6 +242,18 @@ docker compose exec core go test ./e2e/...   # full DB + tunnel + TLS matrix
 
 Outside that environment they `t.Skip` themselves, so a plain `go test ./...` on
 your host stays green.
+
+The BigQuery end-to-end test (against the `goccy/bigquery-emulator` container) is
+additionally gated behind `TABLEKIT_E2E_BIGQUERY`, since the emulator image is
+heavy to pull and build. It stays skipped even with Docker up unless you opt in:
+
+```bash
+docker compose exec core sh -c 'TABLEKIT_E2E_BIGQUERY=1 go test ./e2e/database/ -run BigQuery'
+```
+
+BigQuery's other behavior (config, pagination, value normalization, the read-only
+gate, identity) is covered by ordinary unit tests that need neither Docker nor the
+emulator.
 
 ### Regenerating the state DB code
 
@@ -321,7 +358,7 @@ guest SDK) built into single-file HTML and embedded into the binary. In dev the
 
 Things we want next:
 
-- More engines — SQLite and SQL Server alongside Postgres and MySQL.
+- More engines — SQLite and SQL Server alongside Postgres, MySQL and BigQuery.
 - A few more chart types, and saved views you can re-open.
 - An opt-in write mode, off by default and gated behind an explicit flag, for
   the cases where you really do want the assistant to make a change.

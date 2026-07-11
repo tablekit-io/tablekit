@@ -7,7 +7,7 @@
 
 MCP server that lets you ask ChatGPT or Claude real data questions to get analytics, charts and visualizations straight in your chat. 
 
-**Database Support**: `Postgres`, `MySQL`, `BigQuery` (coming soon)
+**Database Support**: `Postgres`, `MySQL`, `MariaDB`, `BigQuery`
 
 
 
@@ -22,10 +22,10 @@ https://github.com/user-attachments/assets/424b887a-3f22-47ff-9df6-2a3b2837e86a
 1. 📡 **Remote MCP** — HTTP with OAuth authentication. Basically a fancy way to say it works with Claude web or ChatGPT web.
 2. 📈 **Interactive Charts Within Chat** — Based on the new [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) spec. View data or review SQL.
 3. 💽 **JSON / CSV Export** — from withint he interactive chart widget.
-4. 💯 **Multiple Databases Support** — Connect more than one database (Postgres / MySQL).
+4. 💯 **Multiple Databases Support** — Connect more than one database (Postgres / MySQL / MariaDB / BigQuery).
 5. 🕳️ **SSH Tunnel Support** — Reach databases behind private networks.
 6. 🤖 **Multiple Client Support** — Connect more than one ChatGPT / Claude account to the same TableKit server. 
-7. 🔐 **Read-only Queries** — ensured via read-only transactions.
+7. 🔐 **Read-only Queries** — enforced per engine: read-only transactions for the SQL databases, dry-run statement-type checks for BigQuery.
 
 ### Supported Chart Types
 

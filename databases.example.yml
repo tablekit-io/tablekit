@@ -25,3 +25,11 @@ databases:
       host: bastion.example.com
       username: ubuntu
       sshKeyFilePath: /keys/id_ed25519
+
+  # Google BigQuery (read-only). Scopes to a whole project; datasets act as schemas.
+  warehouse:
+    type: bigquery
+    details:
+      projectId: my-gcp-project
+      credentialsFilePath: /keys/bigquery-sa.json # service-account JSON key; give it a viewer/jobUser role
+      location: EU                                  # optional; omit to let BigQuery auto-detect
