@@ -7,7 +7,7 @@
     },
     "sql": {
       "type": "string",
-      "description": "the read-only SQL (SELECT / WITH ... SELECT) to execute; no writes. Annotate it with concise -- comments explaining what each ambiguous part does and why, since the stored SQL is read by human reviewers"
+      "description": "the read-only SQL (SELECT / WITH ... SELECT) to execute; no writes. Use the dialect of the target database's engine type (from list_available_databases); for a bigquery database that is BigQuery Standard SQL with backtick-quoted `project.dataset.table`. Annotate it with concise -- comments explaining what each ambiguous part does and why, since the stored SQL is read by human reviewers"
     },
     "description": {
       "type": "string",

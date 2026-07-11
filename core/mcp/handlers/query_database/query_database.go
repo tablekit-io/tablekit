@@ -50,7 +50,7 @@ type output struct {
 func Register(s *mcp.Server, deps shared.Deps) {
 	tool := &mcp.Tool{
 		Name:        "query_database",
-		Description: "Run read-only SQL on a database. It stores the query, and returns a result_key plus first-page stats (in order to be token efficient). Use the result key with read_results to paginate over the results. Use the result key with show_bar_line_area_chart / show_pie_donut_sunburst_chart to visualize with charts. Rows are not stored — each follow-up re-runs the query against live data. Use list_available_databases to discover database names. The stored SQL is reviewed by humans, so always annotate it with concise -- comments explaining what each ambiguous part of the query does and why it is being done.",
+		Description: "Run read-only SQL on a database. It stores the query, and returns a result_key plus first-page stats (in order to be token efficient). Use the result key with read_results to paginate over the results. Use the result key with show_bar_line_area_chart / show_pie_donut_sunburst_chart to visualize with charts. Rows are not stored — each follow-up re-runs the query against live data. Use list_available_databases to discover database names and each one's engine type. Write SQL in the dialect of that engine: PostgreSQL, MySQL/MariaDB, or — for a bigquery database — BigQuery Standard SQL (backtick-quoted `project.dataset.table`). The stored SQL is reviewed by humans, so always annotate it with concise -- comments explaining what each ambiguous part of the query does and why it is being done.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
 			DestructiveHint: helpers.Pointer(false),
