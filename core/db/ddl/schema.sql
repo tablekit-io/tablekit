@@ -25,8 +25,10 @@ CREATE TABLE config (
     value JSONB NOT NULL
 );
 
--- database_type is the engine family of a queried database.
-CREATE TYPE database_type AS ENUM ('postgres', 'mysql', 'mariadb');
+-- database_type is the engine family of a queried database. Values added after
+-- launch are also appended by an incremental migration (see 00002_bigquery_enum.go)
+-- so existing deployments — where 00001 already ran — pick them up too.
+CREATE TYPE database_type AS ENUM ('postgres', 'mysql', 'mariadb', 'bigquery');
 
 -- databases records one row per physical database tablekit has queried, keyed by
 -- a driver-derived fingerprint rather than the databases.yaml name.
