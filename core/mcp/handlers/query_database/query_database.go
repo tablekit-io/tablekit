@@ -107,11 +107,11 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			DefaultLimit: shared.DefaultLimit,
 			Columns:      shared.ToColumnInfos(result.Columns),
 		}
-		// When rows are inlined the agent has data in hand, so nudge it toward the
-		// chart tools (same as read_results). The template renders the hints.
+		// When rows are inlined the agent has data in hand, so nudge it toward
+		// paginating (read_results) and the chart tools. The template renders the hints.
 		if in.IncludeResults {
 			out.Rows = result.Rows
-			out.HintsForAIAgents = []string{shared.ChartHint}
+			out.HintsForAIAgents = []string{shared.PaginationHint, shared.ChartHint}
 		}
 
 		text, err := shared.RenderText(textTemplate, out)

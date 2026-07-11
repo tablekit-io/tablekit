@@ -73,6 +73,6 @@ func WidgetBridgeMeta() mcp.Meta {
 // host's (sometimes mis-bound) tool-input notification.
 func ChartRenderResult(tool, label string, args any) (*mcp.CallToolResult, ChartRenderOutput, error) {
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "Rendering a " + label + " from the stored query."}},
+		Content: []mcp.Content{&mcp.TextContent{Text: "Rendering a **" + label + "** from the stored query."}},
 	}, ChartRenderOutput{Tool: tool, Args: args}, nil
 }

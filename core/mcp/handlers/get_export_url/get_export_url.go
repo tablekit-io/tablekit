@@ -91,7 +91,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Export link (%s, valid ~5 minutes): %s", in.Format, url),
+				Text: fmt.Sprintf("**Export link** (`%s`, valid ~5 minutes): %s", in.Format, url),
 			}},
 		}, output{URL: url}, nil
 	}

@@ -29,8 +29,10 @@ func TestOutputTemplateRendersWindow(t *testing.T) {
 	text, err := shared.RenderText(textTemplate, out)
 	require.NoError(t, err)
 
-	assert.Contains(t, text, "Window at skip 0 (limit 128) of stored query abc-123: 1 row(s) (more rows available, next_skip 128).")
+	assert.Contains(t, text, "## Results")
+	assert.Contains(t, text, "Window at skip 0 (limit 128) of stored query `abc-123` — 1 row(s) (more rows available, next_skip 128).")
 	assert.Contains(t, text, "| city | orders |")
 	assert.Contains(t, text, "| Dhaka | 5 |")
+	assert.Contains(t, text, "**Hints for AI agents**")
 	assert.Contains(t, text, shared.ChartHint)
 }

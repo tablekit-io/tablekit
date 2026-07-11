@@ -92,7 +92,7 @@ func handle(deps shared.Deps) mcp.ToolHandlerFor[input, output] {
 			SQL:      descriptor.SQL,
 		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Loaded %d row(s) for charting.", result.RowCount)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("**Loaded %d row(s)** for charting.", result.RowCount)}},
 		}, out, nil
 	}
 }

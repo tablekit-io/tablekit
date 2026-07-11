@@ -1,5 +1,9 @@
-{% autoescape off %}Window at skip {{ skip }} (limit {{ limit }}) of stored query {{ key }}: {{ rows_returned }} row(s){% if has_more %} (more rows available, next_skip {{ next_skip }}){% endif %}.
+{% autoescape off %}## Results
+
+Window at skip {{ skip }} (limit {{ limit }}) of stored query `{{ key }}` — {{ rows_returned }} row(s){% if has_more %} (more rows available, next_skip {{ next_skip }}){% endif %}.
 {% if rows %}
 {{ rows|mdtable:columns }}
-{% endif %}{% for hint in hints_for_ai_agents %}
-{{ hint }}{% endfor %}{% endautoescape %}
+{% endif %}{% if hints_for_ai_agents %}
+**Hints for AI agents**
+{% for hint in hints_for_ai_agents %}
+- {{ hint }}{% endfor %}{% endif %}{% endautoescape %}

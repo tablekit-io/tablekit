@@ -24,17 +24,20 @@ func TestOutputTemplateRendersInlinedRows(t *testing.T) {
 			{"city": "Dhaka", "orders": 5},
 			{"city": "New York", "orders": 3},
 		},
-		HintsForAIAgents: []string{shared.ChartHint},
+		HintsForAIAgents: []string{shared.PaginationHint, shared.ChartHint},
 	}
 
 	text, err := shared.RenderText(textTemplate, out)
 	require.NoError(t, err)
 
-	assert.Contains(t, text, "Stored query abc-123 against \"cafe\": 2 row(s) in the first page (more rows available).")
+	assert.Contains(t, text, "## Query Results")
+	assert.Contains(t, text, "Stored query `abc-123` against **cafe** — 2 row(s) in the first page (more rows available).")
 	assert.Contains(t, text, "| city | orders |")
 	assert.Contains(t, text, "| --- | --- |")
 	assert.Contains(t, text, "| Dhaka | 5 |")
 	assert.Contains(t, text, "| New York | 3 |")
+	assert.Contains(t, text, "**Hints for AI agents**")
+	assert.Contains(t, text, shared.PaginationHint)
 	assert.Contains(t, text, shared.ChartHint)
 }
 

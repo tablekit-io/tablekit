@@ -1,4 +1,9 @@
-{% autoescape off %}{{ databases|length }} database(s) configured.
-{% for db in databases %}- {{ db.name }} ({{ db.type }})
-{% endfor %}{% for hint in hints_for_ai_agents %}
-{{ hint }}{% endfor %}{% endautoescape %}
+{% autoescape off %}## Available Databases
+
+{{ databases|length }} database(s) configured.
+{% for db in databases %}
+- **{{ db.name }}** (`{{ db.type }}`){% endfor %}{% if hints_for_ai_agents %}
+
+**Hints for AI agents**
+{% for hint in hints_for_ai_agents %}
+- {{ hint }}{% endfor %}{% endif %}{% endautoescape %}

@@ -32,6 +32,12 @@ func ToColumnInfos(columns []string) []ColumnInfo {
 	return infos
 }
 
+// PaginationHint nudges the agent to page through a stored query with read_results.
+// It is surfaced as a hints_for_ai_agents entry (rendered in the text output's
+// "Hints for AI agents" list) so the guidance is data-driven rather than baked into
+// the summary sentence.
+const PaginationHint = "Pass result_key to read_results to paginate over the result set."
+
 // MoreSuffix renders a short " (more rows available)" note for tool summaries.
 func MoreSuffix(hasMore bool) string {
 	if hasMore {
