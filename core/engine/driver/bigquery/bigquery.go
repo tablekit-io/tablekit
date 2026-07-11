@@ -156,8 +156,16 @@ func ensureReadOnly(ctx context.Context, client *bigqueryapi.Client, db config.D
 	if !ok {
 		return errors.New("validate query: dry run did not return query statistics")
 	}
-	if stats.StatementType != selectStatementType {
-		return fmt.Errorf("only read-only SELECT queries are allowed; got statement type %q", stats.StatementType)
+	return checkStatementType(stats.StatementType)
+}
+
+// checkStatementType is the read-only decision, split out from the dry-run
+// plumbing so it can be tested without a BigQuery client. It permits only a plain
+// SELECT (which a WITH ... SELECT also reports as); every write or multi-statement
+// form is refused.
+func checkStatementType(statementType string) error {
+	if statementType != selectStatementType {
+		return fmt.Errorf("only read-only SELECT queries are allowed; got statement type %q", statementType)
 	}
 	return nil
 }

@@ -104,6 +104,79 @@ databases:
 	assert.Error(t, err, "details and connectionString are mutually exclusive (XOR)")
 }
 
+func TestLoadBigQuery(t *testing.T) {
+	path := writeYAML(t, `
+databases:
+  warehouse:
+    type: bigquery
+    details:
+      projectId: my-gcp-project
+      credentialsFilePath: /keys/sa.json
+      location: EU
+`)
+	databases, err := Load(path)
+	require.NoError(t, err)
+
+	warehouse := databases["warehouse"]
+	assert.Equal(t, DatabaseTypeBigQuery, warehouse.Type)
+	assert.Nil(t, warehouse.Details, "bigquery has no OLTP details")
+	require.NotNil(t, warehouse.BigQuery)
+	assert.Equal(t, "my-gcp-project", warehouse.BigQuery.ProjectID)
+	assert.Equal(t, "/keys/sa.json", warehouse.BigQuery.CredentialsFilePath)
+	assert.Equal(t, "EU", warehouse.BigQuery.Location)
+	assert.Empty(t, warehouse.BigQuery.Endpoint, "endpoint is never set from YAML")
+}
+
+func TestLoadBigQueryRejectsMissingFields(t *testing.T) {
+	missingCredentials := writeYAML(t, `
+databases:
+  x:
+    type: bigquery
+    details: { projectId: p }
+`)
+	_, err := Load(missingCredentials)
+	assert.Error(t, err, "credentialsFilePath is required")
+
+	missingProject := writeYAML(t, `
+databases:
+  x:
+    type: bigquery
+    details: { credentialsFilePath: /keys/sa.json }
+`)
+	_, err = Load(missingProject)
+	assert.Error(t, err, "projectId is required")
+}
+
+func TestLoadBigQueryRejectsSQLOnlyFields(t *testing.T) {
+	// tls, ssh and connectionString are not part of the bigquery variant, so
+	// additionalProperties:false rejects them.
+	for _, body := range []string{
+		`
+databases:
+  x:
+    type: bigquery
+    details: { projectId: p, credentialsFilePath: /k }
+    tls: { mode: require }
+`,
+		`
+databases:
+  x:
+    type: bigquery
+    details: { projectId: p, credentialsFilePath: /k }
+    ssh: { host: bastion, sshKeyFilePath: /k }
+`,
+		`
+databases:
+  x:
+    type: bigquery
+    connectionString: bigquery://p
+`,
+	} {
+		_, err := Load(writeYAML(t, body))
+		assert.Error(t, err)
+	}
+}
+
 func TestLoadSSHDefaults(t *testing.T) {
 	t.Setenv("USER", "deployer")
 	path := writeYAML(t, `
