@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 
 	"core/engine/config"
+	"core/engine/driver/bigquery"
 	"core/engine/driver/mysql"
 	"core/engine/driver/postgres"
 	"core/engine/encoding"
@@ -58,6 +59,8 @@ func engineFor(dbType config.DatabaseType) (databaseEngine, error) {
 		return mysql.NewMySQL(), nil
 	case config.DatabaseTypeMariaDB:
 		return mysql.NewMariaDB(), nil
+	case config.DatabaseTypeBigQuery:
+		return bigquery.Engine{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported database type %q", dbType)
 	}
@@ -110,10 +113,11 @@ func (s *Service) snapshot() map[string]config.Database {
 	return *s.databases.Load()
 }
 
-// RunReadOnly runs query against the named database inside a read-only
-// transaction and returns the (possibly truncated) result. It routes to the
-// engine implementation for the database's type; the caller never learns which
-// driver, tunnel or TLS settings were used.
+// RunReadOnly runs query read-only against the named database and returns the
+// (possibly truncated) result. Read-only is enforced by each engine in its own
+// idiom — a read-only transaction for the SQL engines, a dry-run statement-type
+// check for BigQuery. It routes to the engine implementation for the database's
+// type; the caller never learns which driver, tunnel or TLS settings were used.
 func (s *Service) RunReadOnly(ctx context.Context, databaseName, query string) (*Result, error) {
 	db, ok := s.snapshot()[databaseName]
 	if !ok {
@@ -159,8 +163,8 @@ type PageOptions struct {
 // RunReadOnlyPage runs query against the named database as a paginated window and
 // reports whether more rows exist beyond it. It wraps the query in a LIMIT/OFFSET
 // subquery and over-fetches one row so hasMore can be detected without a second
-// round-trip; the extra row is trimmed before returning. Like RunReadOnly it
-// executes inside a read-only transaction under the statement timeout.
+// round-trip; the extra row is trimmed before returning. Like RunReadOnly it runs
+// read-only (enforced per engine) under the statement timeout.
 func (s *Service) RunReadOnlyPage(ctx context.Context, databaseName, query string, opts PageOptions) (result *Result, hasMore bool, err error) {
 	db, ok := s.snapshot()[databaseName]
 	if !ok {
