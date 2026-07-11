@@ -61,6 +61,7 @@ const (
 	DatabaseTypePostgres DatabaseType = "postgres"
 	DatabaseTypeMySQL    DatabaseType = "mysql"
 	DatabaseTypeMariaDB  DatabaseType = "mariadb"
+	DatabaseTypeBigQuery DatabaseType = "bigquery"
 )
 
 // Database is a resolved, ready-to-dial definition: secrets are plaintext and
@@ -71,6 +72,7 @@ type Database struct {
 	Type             DatabaseType
 	ConnectionString string // empty when details-based
 	Details          *Details
+	BigQuery         *BigQueryDetails // set only for the bigquery engine
 	TLS              *TLSSettings
 	SSH              *SSHSettings
 }
@@ -81,6 +83,29 @@ type Details struct {
 	Database string
 	Username string
 	Password string
+}
+
+// BigQueryDetails is the resolved connection for a BigQuery database. It has no
+// host/port/password: BigQuery is an HTTP job API authenticated with a Google
+// service-account key file, so this struct is kept separate from the OLTP
+// Details. Details is nil for a bigquery database and BigQuery is nil for every
+// other engine.
+type BigQueryDetails struct {
+	// ProjectID is the GCP project the connection scopes to; its datasets play
+	// the role of schemas. Globally unique and immutable, so it doubles as the
+	// physical-database identity.
+	ProjectID string
+	// CredentialsFilePath is the path to the service-account JSON key file, read
+	// directly by the Google client. Like SSHSettings.SSHKeyFilePath, the file is
+	// the secret, so this is a plain path rather than a resolved secret value.
+	CredentialsFilePath string
+	// Location optionally pins the BigQuery processing location (e.g. "US", "EU",
+	// "asia-south1") for datasets outside the client's auto-detected default.
+	Location string
+	// Endpoint overrides the BigQuery API endpoint. It is a test-only seam for
+	// pointing the driver at a local emulator; it is never read from YAML, so
+	// production configs cannot redirect the client to an arbitrary endpoint.
+	Endpoint string
 }
 
 type TLSSettings struct {
@@ -104,7 +129,8 @@ type databasesFile struct {
 }
 
 // rawDatabase is one database entry as written in the YAML, before defaults are
-// applied and secrets are resolved.
+// applied and secrets are resolved. A bigquery entry carries its details in the
+// same `details` block, decoded into rawBigQueryDetails rather than rawDetails.
 type rawDatabase struct {
 	Type             DatabaseType `yaml:"type"`
 	Details          *rawDetails  `yaml:"details"`
@@ -119,6 +145,12 @@ type rawDetails struct {
 	Database string     `yaml:"database"`
 	Username string     `yaml:"username"`
 	Password *rawSecret `yaml:"password"`
+
+	// BigQuery-only fields. They share the `details` block with the OLTP fields
+	// above; the JSON Schema keeps the two shapes from mixing in one entry.
+	ProjectID           string `yaml:"projectId"`
+	CredentialsFilePath string `yaml:"credentialsFilePath"`
+	Location            string `yaml:"location"`
 }
 
 type rawTLS struct {
@@ -233,7 +265,15 @@ func (raw rawDatabase) resolve(name string) (Database, error) {
 		ConnectionString: raw.ConnectionString,
 	}
 
-	if raw.Details != nil {
+	if raw.Type == DatabaseTypeBigQuery {
+		if raw.Details != nil {
+			db.BigQuery = &BigQueryDetails{
+				ProjectID:           raw.Details.ProjectID,
+				CredentialsFilePath: raw.Details.CredentialsFilePath,
+				Location:            raw.Details.Location,
+			}
+		}
+	} else if raw.Details != nil {
 		resolved := Details{
 			Host:     raw.Details.Host,
 			Port:     raw.Details.Port,

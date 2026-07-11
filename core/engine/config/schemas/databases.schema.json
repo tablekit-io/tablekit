@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tablekit.io/schemas/databases.schema.json",
   "title": "Databases",
-  "description": "Database configuration: a named map of databases, each discriminated by `type`. Supported engines: PostgreSQL, MySQL, MariaDB.",
+  "description": "Database configuration: a named map of databases, each discriminated by `type`. Supported engines: PostgreSQL, MySQL, MariaDB, Google BigQuery.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -36,6 +36,9 @@
         },
         {
           "$ref": "#/$defs/mariadbDatabase"
+        },
+        {
+          "$ref": "#/$defs/bigqueryDatabase"
         }
       ]
     },
@@ -162,6 +165,48 @@
         },
         "ssh": {
           "$ref": "#/$defs/ssh"
+        }
+      }
+    },
+    "bigqueryDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "details"
+      ],
+      "properties": {
+        "type": {
+          "const": "bigquery",
+          "description": "Discriminator: Google BigQuery. Read-only; authenticated with a service-account key file. No SSH tunnel, TLS or connection string."
+        },
+        "details": {
+          "$ref": "#/$defs/bigqueryDetails"
+        }
+      }
+    },
+    "bigqueryDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "credentialsFilePath"
+      ],
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "GCP project the connection scopes to. Its datasets are browsed like schemas."
+        },
+        "credentialsFilePath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to the service-account JSON key file, read directly by the BigQuery client. Give it a viewer/jobUser role for read-only access."
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional BigQuery processing location (e.g. US, EU, asia-south1) for datasets outside the client's auto-detected default."
         }
       }
     },
