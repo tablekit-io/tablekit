@@ -102,10 +102,6 @@ type BigQueryDetails struct {
 	// Location optionally pins the BigQuery processing location (e.g. "US", "EU",
 	// "asia-south1") for datasets outside the client's auto-detected default.
 	Location string
-	// Endpoint overrides the BigQuery API endpoint. It is a test-only seam for
-	// pointing the driver at a local emulator; it is never read from YAML, so
-	// production configs cannot redirect the client to an arbitrary endpoint.
-	Endpoint string
 }
 
 type TLSSettings struct {

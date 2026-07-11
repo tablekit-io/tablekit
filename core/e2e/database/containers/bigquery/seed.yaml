@@ -1,0 +1,22 @@
+# Seed loaded by the emulator via --data-from-yaml. One project with a `sample`
+# dataset holding a small `users` table, mirroring the postgres/mysql seeds' role
+# in the e2e matrix (a real table to count and select from).
+projects:
+  - id: tablekit-test
+    datasets:
+      - id: sample
+        tables:
+          - id: users
+            columns:
+              - name: id
+                type: INTEGER
+                mode: REQUIRED
+              - name: name
+                type: STRING
+            data:
+              - id: 1
+                name: alice
+              - id: 2
+                name: bob
+              - id: 3
+                name: carol

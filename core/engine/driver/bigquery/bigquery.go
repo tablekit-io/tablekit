@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"core/engine/config"
@@ -40,16 +41,19 @@ const deriveTimeout = 10 * time.Second
 // refused.
 const selectStatementType = "SELECT"
 
-// newClient opens a BigQuery client for db. It is a package var so tests can point
-// the driver at a local emulator; production always takes the credentials-file
-// path. The returned cleanup closes the client; callers apply their own deadline
-// to ctx first (it bounds client creation).
+// emulatorHostEnv is the standard BigQuery emulator variable. When set, the driver
+// talks to the emulator at that address with authentication disabled instead of
+// the real API — the seam the e2e suite uses. It is honored only in that env, so a
+// production deployment that never sets it always takes the credentials-file path.
+const emulatorHostEnv = "BIGQUERY_EMULATOR_HOST"
+
+// newClient opens a BigQuery client for db. It is a package var so a test in this
+// package could stub it. The returned cleanup closes the client; callers apply
+// their own deadline to ctx first (it bounds client creation).
 var newClient = func(ctx context.Context, db config.Database) (*bigqueryapi.Client, func(), error) {
 	var options []option.ClientOption
-	if db.BigQuery.Endpoint != "" {
-		// Emulator: an explicit endpoint with authentication disabled. Never set
-		// from YAML, so this branch is unreachable in production.
-		options = append(options, option.WithEndpoint(db.BigQuery.Endpoint), option.WithoutAuthentication())
+	if endpoint := os.Getenv(emulatorHostEnv); endpoint != "" {
+		options = append(options, option.WithEndpoint(endpoint), option.WithoutAuthentication())
 	} else {
 		options = append(options, option.WithCredentialsFile(db.BigQuery.CredentialsFilePath))
 	}

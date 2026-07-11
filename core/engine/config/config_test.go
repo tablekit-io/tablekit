@@ -124,7 +124,6 @@ databases:
 	assert.Equal(t, "my-gcp-project", warehouse.BigQuery.ProjectID)
 	assert.Equal(t, "/keys/sa.json", warehouse.BigQuery.CredentialsFilePath)
 	assert.Equal(t, "EU", warehouse.BigQuery.Location)
-	assert.Empty(t, warehouse.BigQuery.Endpoint, "endpoint is never set from YAML")
 }
 
 func TestLoadBigQueryRejectsMissingFields(t *testing.T) {
